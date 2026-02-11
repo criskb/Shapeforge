@@ -98,4 +98,77 @@ public class ContractSerializationTests
         Assert.NotNull(JsonSerializer.Deserialize<OperatorSchema>(schemaJson, JsonOptions));
         Assert.NotNull(JsonSerializer.Deserialize<PipelineRunResult>(pipelineJson, JsonOptions));
     }
+
+
+    [Fact]
+    public void RunManifest_SerializesAndIncludesReproducibilityFields()
+    {
+        var inputMesh = new MeshModel(
+            Vertices: [0, 0, 0, 1, 0, 0, 0, 1, 0],
+            Indices: [0, 1, 2],
+            Normals: null,
+            Units: "mm");
+
+        var report = new OpReport(
+            Name: "repair.fix",
+            Metrics: new Dictionary<string, double> { ["components.before"] = 2 },
+            Warnings: ["auto-bridge may alter tiny features"],
+            Notes: ["seed=123"],
+            ModeAdjustedParams: new Dictionary<string, double> { ["seed"] = 123 },
+            Elapsed: TimeSpan.FromMilliseconds(42));
+
+        var run = new PipelineRunResult(
+            FinalMesh: inputMesh,
+            PreDiagnostics: null,
+            PostDiagnostics: new MeshDiagnostics(
+                "1.0",
+                Topology: new Dictionary<string, double>(),
+                Quality: new Dictionary<string, double>(),
+                Printability: new Dictionary<string, double>(),
+                Issues: [],
+                Counts: new Dictionary<string, long>(),
+                Booleans: new Dictionary<string, bool>()),
+            StepReports: [report],
+            Elapsed: TimeSpan.FromMilliseconds(99),
+            StepElapsed: new Dictionary<string, TimeSpan> { ["repair.fix"] = TimeSpan.FromMilliseconds(42) });
+
+        var context = new OperatorContext(
+            0.2f,
+            new Progress<float>(_ => { }),
+            _ => { },
+            new Dictionary<string, object>(),
+            "mm",
+            ProcessMode.Fdm,
+            PresetQuality.Final,
+            MinimumWallPolicy.Enforce,
+            1.2f,
+            45f,
+            2f,
+            RepairMode.Balanced,
+            ExecutionMode.Final,
+            QualityScalingPolicy.ForMode(ExecutionMode.Final),
+            Seed: 1337);
+
+        var manifest = RunManifestBuilder.Build(
+            inputMesh,
+            run,
+            context,
+            preset: "Fdm",
+            profile: "Fdm-Final-Balanced",
+            fileHash: "deadbeef",
+            readinessStatus: "Green");
+
+        var json = JsonSerializer.Serialize(manifest, JsonOptions);
+        var roundTrip = JsonSerializer.Deserialize<RunManifest>(json, JsonOptions);
+
+        Assert.NotNull(roundTrip);
+        Assert.Contains("\"inputs\"", json);
+        Assert.Contains("\"runtime\"", json);
+        Assert.Contains("\"steps\"", json);
+        Assert.Contains("\"outputs\"", json);
+        Assert.Equal("deadbeef", roundTrip!.Inputs.FileHash);
+        Assert.Equal("Green", roundTrip.Outputs.ReadinessStatus);
+        Assert.Single(roundTrip.Steps);
+    }
+
 }

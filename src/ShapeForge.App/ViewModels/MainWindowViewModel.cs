@@ -216,7 +216,19 @@ public sealed class MainWindowViewModel : ObservableObject
         _postDiagnostics = _runResult.PostDiagnostics;
         CoreToUiMapper.MapPipelineRun(PipelineRun, _runResult);
 
-        MoveToStage(WorkflowStage.RunCompleted, "Pipeline run completed. Next: Compare pre/post diagnostics.");
+        var readinessStatus = _postDiagnostics is null
+            ? ReadinessTrafficLight.Yellow.ToString()
+            : _readinessEvaluator.Evaluate(_postDiagnostics, profile).Status.ToString();
+        var manifest = RunManifestBuilder.Build(
+            _loadedMesh,
+            _runResult,
+            context,
+            preset: SelectedPreset,
+            profile: SelectedRecipe,
+            readinessStatus: readinessStatus);
+        var manifestPath = _stateStore.SaveRunManifest(manifest);
+
+        MoveToStage(WorkflowStage.RunCompleted, $"Pipeline run completed. Manifest saved: {manifestPath}. Next: Compare pre/post diagnostics.");
     }
 
     private void Compare()

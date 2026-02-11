@@ -1,3 +1,4 @@
+using ShapeForge.Core.Pipeline;
 using System.Text.Json;
 
 namespace ShapeForge.App.State;
@@ -37,5 +38,17 @@ public sealed class AppStateStore
     {
         var content = JsonSerializer.Serialize(state, JsonOptions);
         File.WriteAllText(_path, content);
+    }
+
+    public string SaveRunManifest(RunManifest manifest)
+    {
+        var manifestFolder = Path.Combine(Path.GetDirectoryName(_path)!, "manifests");
+        Directory.CreateDirectory(manifestFolder);
+
+        var fileName = $"run-manifest-{DateTime.UtcNow:yyyyMMdd-HHmmss}.json";
+        var manifestPath = Path.Combine(manifestFolder, fileName);
+        var content = JsonSerializer.Serialize(manifest, JsonOptions);
+        File.WriteAllText(manifestPath, content);
+        return manifestPath;
     }
 }
