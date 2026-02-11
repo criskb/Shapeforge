@@ -212,6 +212,7 @@ static async Task RunFixAsync(string[] args, OperatorRegistry registry)
 
         var runner = new PipelineRunner();
         var steps = ResolvePresetPipeline(profile, registry);
+        PrintOperatorSupportWarnings(steps, profile, BackendCapabilityFlags.FastMesh);
 
         var preDiagnostics = ReportCard.Build(mesh);
         var (fixedMesh, reports) = await runner.RunAsync(mesh, steps, ctx, CancellationToken.None);
@@ -256,6 +257,23 @@ static async Task RunFixAsync(string[] args, OperatorRegistry registry)
     {
         Console.Error.WriteLine($"Fix failed: {ex.Message}");
         Environment.ExitCode = 1;
+    }
+}
+
+static void PrintOperatorSupportWarnings(
+    IEnumerable<IOperator> steps,
+    PresetParameters profile,
+    BackendCapabilityFlags availableBackends)
+{
+    foreach (var step in steps)
+    {
+        var support = OperatorSupportEvaluator.Evaluate(step.Schema, profile.Mode, profile.Quality, availableBackends);
+        if (support.Level == OperatorSupportLevel.Supported)
+        {
+            continue;
+        }
+
+        Console.WriteLine($"WARNING: operator '{step.Id}' is {support.Level.ToString().ToLowerInvariant()} for mode={profile.Mode}, quality={profile.Quality}: {support.Reason}");
     }
 }
 
@@ -521,6 +539,9 @@ static void RunOperatorsCommand(string[] args, OperatorRegistry registry)
                 category = schema.Category,
                 deterministic = schema.Deterministic,
                 estimatedCost = schema.EstimatedCost,
+                requiredBackendCapabilities = schema.RequiredBackendCapabilities.ToString(),
+                supportedModes = schema.SupportedModes,
+                supportedQualities = schema.SupportedQualities,
                 version = schema.Version,
                 description = schema.Description,
                 parameters = schema.Parameters
@@ -563,6 +584,17 @@ static void RunOperatorsCommand(string[] args, OperatorRegistry registry)
         Console.WriteLine($"  category: {op.category}");
         Console.WriteLine($"  deterministic: {op.deterministic}");
         Console.WriteLine($"  estimated-cost: {op.estimatedCost:0.###}");
+        Console.WriteLine($"  required-backends: {op.requiredBackendCapabilities}");
+        if (op.supportedModes is not null)
+        {
+            Console.WriteLine($"  supported-modes: {string.Join(", ", op.supportedModes)}");
+        }
+
+        if (op.supportedQualities is not null)
+        {
+            Console.WriteLine($"  supported-qualities: {string.Join(", ", op.supportedQualities)}");
+        }
+
         Console.WriteLine($"  params: {op.parameters.Length}");
     }
 

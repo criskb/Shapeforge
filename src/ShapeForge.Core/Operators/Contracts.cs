@@ -32,10 +32,66 @@ public record OperatorSchema(
     IReadOnlyList<OperatorParameterSchema> Parameters,
     string Category = "analysis.generic",
     bool Deterministic = true,
-    double EstimatedCost = 1.0)
+    double EstimatedCost = 1.0,
+    BackendCapabilityFlags RequiredBackendCapabilities = BackendCapabilityFlags.None,
+    IReadOnlyList<ProcessMode>? SupportedModes = null,
+    IReadOnlyList<PresetQuality>? SupportedQualities = null)
 {
     public static OperatorSchema Empty(string id, string displayName)
         => new(id, displayName, "1.0", string.Empty, Array.Empty<OperatorParameterSchema>());
+}
+
+[Flags]
+public enum BackendCapabilityFlags
+{
+    None = 0,
+    FastMesh = 1 << 0,
+    Voxel = 1 << 1
+}
+
+public enum OperatorSupportLevel
+{
+    Supported,
+    Limited,
+    NotSupported
+}
+
+public sealed record OperatorSupportResult(
+    OperatorSupportLevel Level,
+    string Reason);
+
+public static class OperatorSupportEvaluator
+{
+    public static OperatorSupportResult Evaluate(
+        OperatorSchema schema,
+        ProcessMode mode,
+        PresetQuality quality,
+        BackendCapabilityFlags availableBackends)
+    {
+        if (schema.SupportedModes is { Count: > 0 } && !schema.SupportedModes.Contains(mode))
+        {
+            return new OperatorSupportResult(
+                OperatorSupportLevel.NotSupported,
+                $"mode '{mode}' is unsupported; supported modes: {string.Join(", ", schema.SupportedModes)}");
+        }
+
+        if (schema.SupportedQualities is { Count: > 0 } && !schema.SupportedQualities.Contains(quality))
+        {
+            return new OperatorSupportResult(
+                OperatorSupportLevel.NotSupported,
+                $"quality '{quality}' is unsupported; supported qualities: {string.Join(", ", schema.SupportedQualities)}");
+        }
+
+        var missing = schema.RequiredBackendCapabilities & ~availableBackends;
+        if (missing != BackendCapabilityFlags.None)
+        {
+            return new OperatorSupportResult(
+                OperatorSupportLevel.Limited,
+                $"missing backend capability '{missing}', fallback behavior may be used");
+        }
+
+        return new OperatorSupportResult(OperatorSupportLevel.Supported, "supported");
+    }
 }
 
 public record OpReport(
@@ -83,4 +139,3 @@ public record OperatorContext(
     public int DeterministicSeedFor(string operatorId)
         => HashCode.Combine(Seed, operatorId, ExecutionMode, Mode, Quality, Units);
 }
-

@@ -39,7 +39,10 @@ public sealed class ThicknessEnforceOperator : IOperator
         ],
         Category: OperatorCategories.PrepFdmThickness,
         Deterministic: true,
-        EstimatedCost: 7.5);
+        EstimatedCost: 7.5,
+        RequiredBackendCapabilities: BackendCapabilityFlags.Voxel,
+        SupportedModes: [ProcessMode.Fdm],
+        SupportedQualities: [PresetQuality.Preview, PresetQuality.Final]);
 
     public Task<(MeshModel mesh, OpReport report)> RunAsync(MeshModel input, OperatorContext ctx, CancellationToken ct)
     {
