@@ -1,0 +1,39 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="ShapeForge.App.MainWindow"
+        Width="1200"
+        Height="720"
+        Title="ShapeForge">
+  <Grid ColumnDefinitions="250,*,320" RowDefinitions="*,Auto">
+    <StackPanel Grid.Column="0" Margin="12" Spacing="8">
+      <TextBlock FontSize="20" FontWeight="Bold" Text="ShapeForge" />
+      <TextBlock Text="Presets" FontWeight="SemiBold" />
+      <ComboBox SelectedIndex="0">
+        <ComboBoxItem>FDM</ComboBoxItem>
+        <ComboBoxItem>SLA</ComboBoxItem>
+        <ComboBoxItem>SLS</ComboBoxItem>
+      </ComboBox>
+      <TextBlock Text="Operator Stack" FontWeight="SemiBold" Margin="0,12,0,0" />
+      <CheckBox IsChecked="True" Content="3D Print Fix" />
+      <CheckBox IsChecked="True" Content="Min Thickness" />
+      <CheckBox IsChecked="False" Content="Hollow + Drain" />
+    </StackPanel>
+
+    <Border Grid.Column="1" Margin="12" Background="#101820" CornerRadius="8">
+      <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="White" Text="3D Viewport (MVP placeholder)" />
+    </Border>
+
+    <StackPanel Grid.Column="2" Margin="12" Spacing="8">
+      <TextBlock Text="Diagnostics" FontSize="16" FontWeight="SemiBold" />
+      <TextBlock Text="Triangles: -" />
+      <TextBlock Text="Volume delta: -" />
+      <TextBlock Text="Min thickness: -" />
+      <TextBlock Text="Trapped volumes: -" />
+      <Button Margin="0,16,0,0" Content="Export STL" />
+    </StackPanel>
+
+    <Border Grid.Row="1" Grid.ColumnSpan="3" Background="#202020" Padding="8">
+      <TextBlock Foreground="White" Text="Ready" />
+    </Border>
+  </Grid>
+</Window>
