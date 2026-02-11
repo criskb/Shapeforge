@@ -43,7 +43,12 @@ public sealed class RepairFixOperator(float closeRadiusMm = 0.6f, float smoothSt
             ? CloseSmallHoles(windingFixed, welded.Vertices, effectiveCloseRadiusMm)
             : (windingFixed, 0);
 
-        var output = BuildMesh(welded.Vertices, closed, input.Units);
+        var tinyShellThresholdMm = effectiveCloseRadiusMm * 2f;
+        var (withoutTinyShells, tinyShellRemoved) = tinyShellThresholdMm > 0f
+            ? RemoveTinyShells(closed, welded.Vertices, tinyShellThresholdMm)
+            : (closed, 0);
+
+        var output = BuildMesh(welded.Vertices, withoutTinyShells, input.Units);
 
         ctx.Progress.Report(1.0f);
         var report = new OpReport(
@@ -58,7 +63,8 @@ public sealed class RepairFixOperator(float closeRadiusMm = 0.6f, float smoothSt
                 ["vertex.weld.merged"] = vertices.Count - welded.Vertices.Count,
                 ["triangles.removed.degenerate"] = degenerateRemoved,
                 ["triangles.removed.duplicate"] = duplicateRemoved,
-                ["triangles.added.hole-closure"] = holeFillAdded
+                ["triangles.added.hole-closure"] = holeFillAdded,
+                ["triangles.removed.tiny-shells"] = tinyShellRemoved
             },
             Warnings: [],
             Notes:
@@ -68,8 +74,9 @@ public sealed class RepairFixOperator(float closeRadiusMm = 0.6f, float smoothSt
                 $"quality={ctx.Quality}",
                 $"mode={ctx.Mode}",
                 $"overhangThresholdDeg={ctx.OverhangThresholdDeg:0.###}",
+                $"tinyShellThresholdMm={tinyShellThresholdMm:0.###}",
                 $"smooth={smoothStrength}",
-                "Deterministic in-memory repair steps applied (weld/clean/orient/optional-hole-fill)."
+                "Deterministic in-memory repair steps applied (weld/clean/orient/optional-hole-fill/tiny-shell-filter)."
             ]);
 
         return Task.FromResult((output, report));
@@ -446,4 +453,135 @@ public sealed class RepairFixOperator(float closeRadiusMm = 0.6f, float smoothSt
 
     private static double SignedTetraVolume(Vector3 a, Vector3 b, Vector3 c)
         => Vector3.Dot(a, Vector3.Cross(b, c)) / 6.0;
+
+    private static (List<(int A, int B, int C)> Triangles, int Removed) RemoveTinyShells(
+        List<(int A, int B, int C)> triangles,
+        List<Vector3> vertices,
+        float tinyShellThresholdMm)
+    {
+        if (triangles.Count < 2)
+        {
+            return (triangles, 0);
+        }
+
+        var trianglesByVertex = new Dictionary<int, List<int>>();
+        for (var i = 0; i < triangles.Count; i++)
+        {
+            var tri = triangles[i];
+            AddTriangleReference(trianglesByVertex, tri.A, i);
+            AddTriangleReference(trianglesByVertex, tri.B, i);
+            AddTriangleReference(trianglesByVertex, tri.C, i);
+        }
+
+        var components = new List<List<int>>();
+        var visited = new bool[triangles.Count];
+
+        for (var i = 0; i < triangles.Count; i++)
+        {
+            if (visited[i])
+            {
+                continue;
+            }
+
+            var queue = new Queue<int>();
+            var component = new List<int>();
+            visited[i] = true;
+            queue.Enqueue(i);
+
+            while (queue.Count > 0)
+            {
+                var current = queue.Dequeue();
+                component.Add(current);
+
+                var tri = triangles[current];
+                VisitConnectedTriangles(trianglesByVertex, tri.A, visited, queue);
+                VisitConnectedTriangles(trianglesByVertex, tri.B, visited, queue);
+                VisitConnectedTriangles(trianglesByVertex, tri.C, visited, queue);
+            }
+
+            components.Add(component);
+        }
+
+        if (components.Count <= 1)
+        {
+            return (triangles, 0);
+        }
+
+        var largestComponent = components
+            .OrderByDescending(c => c.Count)
+            .ThenBy(c => c.Min())
+            .First();
+
+        var keptTriangles = new List<(int A, int B, int C)>(triangles.Count);
+        var removed = 0;
+
+        foreach (var component in components)
+        {
+            var remove = !ReferenceEquals(component, largestComponent) && ComponentDiagonal(component, triangles, vertices) <= tinyShellThresholdMm;
+            if (remove)
+            {
+                removed += component.Count;
+                continue;
+            }
+
+            foreach (var triIndex in component.OrderBy(idx => idx))
+            {
+                keptTriangles.Add(triangles[triIndex]);
+            }
+        }
+
+        return removed == 0 ? (triangles, 0) : (keptTriangles, removed);
+    }
+
+    private static float ComponentDiagonal(List<int> component, List<(int A, int B, int C)> triangles, List<Vector3> vertices)
+    {
+        var min = new Vector3(float.MaxValue, float.MaxValue, float.MaxValue);
+        var max = new Vector3(float.MinValue, float.MinValue, float.MinValue);
+
+        foreach (var triIndex in component)
+        {
+            var tri = triangles[triIndex];
+            Include(ref min, ref max, vertices[tri.A]);
+            Include(ref min, ref max, vertices[tri.B]);
+            Include(ref min, ref max, vertices[tri.C]);
+        }
+
+        return (max - min).Length();
+    }
+
+    private static void Include(ref Vector3 min, ref Vector3 max, Vector3 value)
+    {
+        min = Vector3.Min(min, value);
+        max = Vector3.Max(max, value);
+    }
+
+    private static void VisitConnectedTriangles(Dictionary<int, List<int>> trianglesByVertex, int vertex, bool[] visited, Queue<int> queue)
+    {
+        if (!trianglesByVertex.TryGetValue(vertex, out var neighbors))
+        {
+            return;
+        }
+
+        foreach (var next in neighbors.OrderBy(idx => idx))
+        {
+            if (visited[next])
+            {
+                continue;
+            }
+
+            visited[next] = true;
+            queue.Enqueue(next);
+        }
+    }
+
+    private static void AddTriangleReference(Dictionary<int, List<int>> map, int vertex, int triIndex)
+    {
+        if (!map.TryGetValue(vertex, out var list))
+        {
+            list = [];
+            map[vertex] = list;
+        }
+
+        list.Add(triIndex);
+    }
 }
