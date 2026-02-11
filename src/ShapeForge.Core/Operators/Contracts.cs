@@ -29,7 +29,10 @@ public record OperatorSchema(
     string DisplayName,
     string Version,
     string Description,
-    IReadOnlyList<OperatorParameterSchema> Parameters)
+    IReadOnlyList<OperatorParameterSchema> Parameters,
+    string Category = "analysis.generic",
+    bool Deterministic = true,
+    double EstimatedCost = 1.0)
 {
     public static OperatorSchema Empty(string id, string displayName)
         => new(id, displayName, "1.0", string.Empty, Array.Empty<OperatorParameterSchema>());
