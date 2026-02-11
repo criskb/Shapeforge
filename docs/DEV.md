@@ -23,5 +23,5 @@ dotnet test ShapeForge.sln
 ## macOS/Xcode workflow
 
 - Use `scripts/macos/build-app.sh` and `scripts/macos/run-app.sh`.
-- `build-app.sh universal` creates `artifacts/macos/universal/ShapeForge.App.app` with both `arm64` and `x86_64`.
+- `build-app.sh universal` creates `artifacts/macos/universal/ShapeForge.App.app` with both `arm64` and `x86_64` payloads under `Contents/Resources/*`, selected by a launcher script.
 - Full setup is documented in `docs/MACOS_XCODE.md`.

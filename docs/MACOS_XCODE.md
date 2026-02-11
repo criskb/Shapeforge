@@ -33,13 +33,14 @@ This produces:
 artifacts/macos/universal/ShapeForge.App.app
 ```
 
-Verify architecture support:
+Verify both architecture payloads exist:
 
 ```bash
-lipo -archs artifacts/macos/universal/ShapeForge.App.app/Contents/MacOS/ShapeForge.App
+file artifacts/macos/universal/ShapeForge.App.app/Contents/Resources/osx-arm64/ShapeForge.App
+file artifacts/macos/universal/ShapeForge.App.app/Contents/Resources/osx-x64/ShapeForge.App
 ```
 
-Expected output includes both `arm64` and `x86_64`.
+Expected output shows `arm64` for the first binary and `x86_64` for the second.
 
 Single-architecture builds are still available:
 

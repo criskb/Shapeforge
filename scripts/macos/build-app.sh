@@ -34,11 +34,6 @@ if ! command -v xcodebuild >/dev/null 2>&1; then
 fi
 
 if [[ "$RID" == "universal" ]]; then
-  if ! command -v lipo >/dev/null 2>&1; then
-    echo "error: lipo not found. Install Xcode + Command Line Tools." >&2
-    exit 127
-  fi
-
   publish_rid "osx-arm64"
   publish_rid "osx-x64"
 
@@ -52,26 +47,36 @@ if [[ "$RID" == "universal" ]]; then
   rm -rf "$APP_DIR"
   mkdir -p "$MACOS_DIR" "$CONTENTS_DIR/Resources"
 
-  cp -R "$ARM_DIR"/. "$MACOS_DIR"/
+  # Keep per-architecture publish outputs intact, and dispatch at runtime.
+  rm -rf "$CONTENTS_DIR/Resources/osx-arm64" "$CONTENTS_DIR/Resources/osx-x64"
+  cp -R "$ARM_DIR" "$CONTENTS_DIR/Resources/osx-arm64"
+  cp -R "$X64_DIR" "$CONTENTS_DIR/Resources/osx-x64"
 
-  lipo -create \
-    "$ARM_DIR/ShapeForge.App" \
-    "$X64_DIR/ShapeForge.App" \
-    -output "$MACOS_DIR/ShapeForge.App"
+  cat > "$MACOS_DIR/ShapeForge.App" <<'LAUNCHER'
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CONTENTS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+RES_DIR="$CONTENTS_DIR/Resources"
+
+ARCH="$(uname -m)"
+case "$ARCH" in
+  arm64)
+    TARGET="$RES_DIR/osx-arm64/ShapeForge.App"
+    ;;
+  x86_64)
+    TARGET="$RES_DIR/osx-x64/ShapeForge.App"
+    ;;
+  *)
+    echo "Unsupported macOS architecture: $ARCH" >&2
+    exit 1
+    ;;
+esac
+
+exec "$TARGET" "$@"
+LAUNCHER
   chmod +x "$MACOS_DIR/ShapeForge.App"
-
-  # Merge additional native Mach-O binaries (e.g. .dylib) when present in both outputs.
-  while IFS= read -r arm_file; do
-    rel_path="${arm_file#"$ARM_DIR/"}"
-    x64_file="$X64_DIR/$rel_path"
-    out_file="$MACOS_DIR/$rel_path"
-
-    if [[ -f "$x64_file" ]]; then
-      if file "$arm_file" | grep -q "Mach-O" && file "$x64_file" | grep -q "Mach-O"; then
-        lipo -create "$arm_file" "$x64_file" -output "$out_file" || true
-      fi
-    fi
-  done < <(find "$ARM_DIR" -type f \( -name "*.dylib" -o -name "*.so" \))
 
   cat > "$CONTENTS_DIR/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -99,7 +104,9 @@ if [[ "$RID" == "universal" ]]; then
 PLIST
 
   echo "Universal app bundle built: $APP_DIR"
-  echo "Verify architectures with: lipo -archs '$MACOS_DIR/ShapeForge.App'"
+  echo "Contains per-arch payloads:"
+  echo "  - $CONTENTS_DIR/Resources/osx-arm64"
+  echo "  - $CONTENTS_DIR/Resources/osx-x64"
 else
   publish_rid "$RID"
 fi
