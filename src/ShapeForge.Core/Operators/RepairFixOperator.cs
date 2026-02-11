@@ -1,4 +1,5 @@
 using ShapeForge.Core.Geometry;
+using ShapeForge.Core.Pipeline;
 using System.Numerics;
 
 namespace ShapeForge.Core.Operators;
@@ -12,7 +13,8 @@ public sealed class RepairFixOperator(float closeRadiusMm = 0.6f, float smoothSt
     {
         ct.ThrowIfCancellationRequested();
         var triangleCountBefore = input.Indices.Length / 3;
-        var weldEpsilon = MathF.Max(1e-6f, ctx.VoxelSizeMm * 0.25f);
+        var qualityScale = ctx.Quality == PresetQuality.Preview ? 1.25f : 1.0f;
+        var weldEpsilon = MathF.Max(1e-6f, ctx.VoxelSizeMm * 0.25f * qualityScale);
 
         ctx.Progress.Report(0.1f);
         var vertices = ToVectorList(input.Vertices);
@@ -28,8 +30,17 @@ public sealed class RepairFixOperator(float closeRadiusMm = 0.6f, float smoothSt
         var windingFixed = FixWindingConsistency(withoutDuplicates, welded.Vertices);
 
         ctx.Progress.Report(0.9f);
-        var (closed, holeFillAdded) = closeRadiusMm > 0f
-            ? CloseSmallHoles(windingFixed, welded.Vertices, closeRadiusMm)
+        var repairRadiusScale = ctx.RepairMode switch
+        {
+            RepairMode.Conservative => 0.75f,
+            RepairMode.Balanced => 1.0f,
+            RepairMode.Aggressive => 1.35f,
+            _ => 1.0f
+        };
+
+        var effectiveCloseRadiusMm = closeRadiusMm * repairRadiusScale;
+        var (closed, holeFillAdded) = effectiveCloseRadiusMm > 0f
+            ? CloseSmallHoles(windingFixed, welded.Vertices, effectiveCloseRadiusMm)
             : (windingFixed, 0);
 
         var output = BuildMesh(welded.Vertices, closed, input.Units);
@@ -52,7 +63,11 @@ public sealed class RepairFixOperator(float closeRadiusMm = 0.6f, float smoothSt
             Warnings: [],
             Notes:
             [
-                $"closeRadiusMm={closeRadiusMm}",
+                $"closeRadiusMm={effectiveCloseRadiusMm:0.###}",
+                $"repairMode={ctx.RepairMode}",
+                $"quality={ctx.Quality}",
+                $"mode={ctx.Mode}",
+                $"overhangThresholdDeg={ctx.OverhangThresholdDeg:0.###}",
                 $"smooth={smoothStrength}",
                 "Deterministic in-memory repair steps applied (weld/clean/orient/optional-hole-fill)."
             ]);
