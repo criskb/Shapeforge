@@ -1,3 +1,4 @@
+using ShapeForge.Core.Diagnostics;
 using ShapeForge.Core.Geometry;
 using System.Numerics;
 
@@ -13,6 +14,16 @@ public sealed class ThicknessEnforceOperator(float minimumMm, ThicknessMode mode
 {
     public string Id => "thickness.enforce";
     public string DisplayName => "Minimum Wall Thickness";
+
+    public OperatorSchema Schema => new(
+        Id,
+        DisplayName,
+        "1.0",
+        "Detects and optionally inflates regions that violate a minimum wall thickness target.",
+        [
+            new OperatorParameterSchema("minimumMm", OperatorParameterType.Number, "Minimum target wall thickness in millimeters.", true, minimumMm, Min: 0),
+            new OperatorParameterSchema("mode", OperatorParameterType.Enum, "How enforcement is applied.", true, mode.ToString(), AllowedValues: Enum.GetNames<ThicknessMode>())
+        ]);
 
     public Task<(MeshModel mesh, OpReport report)> RunAsync(MeshModel input, OperatorContext ctx, CancellationToken ct)
     {
@@ -45,10 +56,17 @@ public sealed class ThicknessEnforceOperator(float minimumMm, ThicknessMode mode
             }
         }
 
+        var structuredIssues = new List<DiagnosticIssue>();
         if (!geometryEdited)
         {
             warnings.Add("severity=warning: thickness enforcement not applied; detection metrics only and no geometry edit was applied.");
             notes.Add("no geometry edit was applied");
+            structuredIssues.Add(new DiagnosticIssue(
+                IssueSeverity.Warning,
+                "thickness.enforcement.skipped",
+                "Thickness enforcement did not modify the mesh; detection metrics only.",
+                1,
+                new Dictionary<string, string> { ["mode"] = mode.ToString() }));
         }
 
         var afterDistances = ComputeNearestNeighborDistances(appliedVertices);
@@ -69,7 +87,8 @@ public sealed class ThicknessEnforceOperator(float minimumMm, ThicknessMode mode
                 ["enforcement.applied"] = geometryEdited ? 1 : 0
             },
             warnings,
-            notes);
+            notes,
+            structuredIssues);
 
         return Task.FromResult((output, report));
     }

@@ -1,6 +1,27 @@
 namespace ShapeForge.Core.Geometry;
 
-public record MeshModel(float[] Vertices, int[] Indices, float[]? Normals, string Units = "mm");
+public record MeshSourceInfo(
+    string? FilePath = null,
+    string? FileFormat = null,
+    DateTimeOffset? ImportedAtUtc = null,
+    string? SourceHash = null);
+
+public record MeshTransformRecord(
+    string Step,
+    DateTimeOffset AppliedAtUtc,
+    Dictionary<string, string>? Parameters = null);
+
+public record MeshModel(
+    float[] Vertices,
+    int[] Indices,
+    float[]? Normals,
+    string Units = "mm",
+    MeshSourceInfo? SourceInfo = null,
+    IReadOnlyList<MeshTransformRecord>? transformHistory = null,
+    Dictionary<string, string>? Tags = null)
+{
+    public IReadOnlyList<MeshTransformRecord> TransformHistory { get; init; } = transformHistory ?? Array.Empty<MeshTransformRecord>();
+}
 
 public record VoxelModel(
     object GridHandle,
