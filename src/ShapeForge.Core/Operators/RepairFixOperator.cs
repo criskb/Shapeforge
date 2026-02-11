@@ -41,18 +41,29 @@ public sealed class RepairFixOperator : IOperator
         var vertexCountBefore = input.Vertices.Length / 3;
         var qualityScale = ctx.Quality == PresetQuality.Preview ? 1.25f : 1.0f;
         var weldEpsilon = MathF.Max(1e-6f, ctx.VoxelSizeMm * 0.25f * qualityScale);
+        var smoothingPasses = Math.Max(0, ctx.ScalingPolicy.SmoothingPasses);
 
         ctx.Progress.Report(0.1f);
+        ct.ThrowIfCancellationRequested();
         var welded = _geometryBackend.WeldVertices(input, weldEpsilon, out var weldedMerged);
 
         ctx.Progress.Report(0.35f);
+        ct.ThrowIfCancellationRequested();
         var noDegenerates = _geometryBackend.RemoveDegenerateFaces(welded, weldEpsilon, out var degenerateRemoved);
 
         ctx.Progress.Report(0.55f);
+        ct.ThrowIfCancellationRequested();
         var noDuplicates = _geometryBackend.RemoveDuplicateFaces(noDegenerates, out var duplicateRemoved);
 
         ctx.Progress.Report(0.75f);
+        ct.ThrowIfCancellationRequested();
         var windingFixed = _geometryBackend.FixNormalsAndOrientation(noDuplicates);
+
+        for (var i = 0; i < smoothingPasses; i++)
+        {
+            ct.ThrowIfCancellationRequested();
+            windingFixed = _geometryBackend.FixNormalsAndOrientation(windingFixed);
+        }
 
         ctx.Progress.Report(0.9f);
         var repairRadiusScale = ctx.RepairMode switch
@@ -63,11 +74,12 @@ public sealed class RepairFixOperator : IOperator
             _ => 1.0f
         };
 
-        var effectiveCloseRadiusMm = _closeRadiusMm * repairRadiusScale;
+        var effectiveCloseRadiusMm = _closeRadiusMm * repairRadiusScale * MathF.Max(0.5f, ctx.ScalingPolicy.SamplingDensityScale);
         var addedHoles = 0;
         var closed = windingFixed;
         if (effectiveCloseRadiusMm > 0f)
         {
+            ct.ThrowIfCancellationRequested();
             closed = _geometryBackend.FillSmallHoles(windingFixed, effectiveCloseRadiusMm, out addedHoles);
         }
 
@@ -76,6 +88,7 @@ public sealed class RepairFixOperator : IOperator
         var noTinyShells = closed;
         if (tinyShellThresholdMm > 0f)
         {
+            ct.ThrowIfCancellationRequested();
             noTinyShells = _geometryBackend.RemoveTinyShells(closed, tinyShellThresholdMm, out removedTinyShells);
         }
 
@@ -93,7 +106,9 @@ public sealed class RepairFixOperator : IOperator
                 ["triangles.removed.degenerate"] = degenerateRemoved,
                 ["triangles.removed.duplicate"] = duplicateRemoved,
                 ["triangles.added.hole-closure"] = addedHoles,
-                ["triangles.removed.tiny-shells"] = removedTinyShells
+                ["triangles.removed.tiny-shells"] = removedTinyShells,
+                ["mode.smoothing.passes"] = smoothingPasses,
+                ["mode.sampling.density.scale"] = ctx.ScalingPolicy.SamplingDensityScale
             },
             Warnings: [],
             Notes:
@@ -105,6 +120,9 @@ public sealed class RepairFixOperator : IOperator
                 $"overhangThresholdDeg={ctx.OverhangThresholdDeg:0.###}",
                 $"tinyShellThresholdMm={tinyShellThresholdMm:0.###}",
                 $"smooth={_smoothStrength}",
+                $"executionMode={ctx.ExecutionMode}",
+                $"smoothingPasses={smoothingPasses}",
+                $"seed={ctx.DeterministicSeedFor(Id)}",
                 "Deterministic backend-driven mesh repair steps applied (weld/clean/orient/optional-hole-fill/tiny-shell-filter)."
             ]);
 

@@ -9,4 +9,5 @@ public record PipelineRunResult(
     MeshDiagnostics? PreDiagnostics,
     MeshDiagnostics? PostDiagnostics,
     IReadOnlyList<OpReport> StepReports,
-    TimeSpan Elapsed);
+    TimeSpan Elapsed,
+    IReadOnlyDictionary<string, TimeSpan>? StepElapsed = null);

@@ -43,9 +43,12 @@ public record OpReport(
     Dictionary<string, double> Metrics,
     List<string> Warnings,
     List<string> Notes,
-    List<DiagnosticIssue>? Issues = null)
+    List<DiagnosticIssue>? Issues = null,
+    Dictionary<string, double>? ModeAdjustedParams = null,
+    TimeSpan? Elapsed = null)
 {
     public IReadOnlyList<DiagnosticIssue> StructuredIssues { get; init; } = Issues ?? new List<DiagnosticIssue>();
+    public IReadOnlyDictionary<string, double> ModeAdjustedParameters { get; init; } = ModeAdjustedParams ?? new Dictionary<string, double>();
 }
 
 public interface IOperator
@@ -72,4 +75,12 @@ public record OperatorContext(
     float MinWallMm,
     float OverhangThresholdDeg,
     float MinimumDrainHoleMm,
-    RepairMode RepairMode);
+    RepairMode RepairMode,
+    ExecutionMode ExecutionMode,
+    QualityScalingPolicy ScalingPolicy,
+    int Seed)
+{
+    public int DeterministicSeedFor(string operatorId)
+        => HashCode.Combine(Seed, operatorId, ExecutionMode, Mode, Quality, Units);
+}
+

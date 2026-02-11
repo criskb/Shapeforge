@@ -32,7 +32,7 @@ public class RepairFixOperatorTests
             0.2f,
             new Progress<float>(_ => { }),
             _ => { },
-            new Dictionary<string, object>(), "mm", ProcessMode.Fdm, PresetQuality.Final, MinimumWallPolicy.Strict, 1.2f, 45f, 0f, RepairMode.Balanced);
+            new Dictionary<string, object>(), "mm", ProcessMode.Fdm, PresetQuality.Final, MinimumWallPolicy.Strict, 1.2f, 45f, 0f, RepairMode.Balanced, ExecutionMode.Standard, QualityScalingPolicy.ForMode(ExecutionMode.Standard), 1234);
 
         var (mesh, report) = await op.RunAsync(input, ctx, CancellationToken.None);
 
@@ -51,7 +51,7 @@ public class RepairFixOperatorTests
             Normals: null);
 
         var op = new RepairFixOperator(closeRadiusMm: 0.3f);
-        var ctx = new OperatorContext(0.1f, new Progress<float>(_ => { }), _ => { }, new Dictionary<string, object>(), "mm", ProcessMode.Fdm, PresetQuality.Final, MinimumWallPolicy.Strict, 1.2f, 45f, 0f, RepairMode.Balanced);
+        var ctx = new OperatorContext(0.1f, new Progress<float>(_ => { }), _ => { }, new Dictionary<string, object>(), "mm", ProcessMode.Fdm, PresetQuality.Final, MinimumWallPolicy.Strict, 1.2f, 45f, 0f, RepairMode.Balanced, ExecutionMode.Standard, QualityScalingPolicy.ForMode(ExecutionMode.Standard), 1234);
 
         var (meshA, reportA) = await op.RunAsync(input, ctx, CancellationToken.None);
         var (meshB, reportB) = await op.RunAsync(input, ctx, CancellationToken.None);
