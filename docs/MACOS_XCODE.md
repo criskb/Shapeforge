@@ -21,23 +21,40 @@ ShapeForge is a .NET 8 solution. On macOS, Xcode is used to provide the native t
 
 ## Build from Terminal (Xcode-backed toolchain)
 
-From repo root:
+Build a **universal** macOS app (Apple Silicon + Intel):
+
+```bash
+./scripts/macos/build-app.sh universal
+```
+
+This produces:
+
+```text
+artifacts/macos/universal/ShapeForge.App.app
+```
+
+Verify architecture support:
+
+```bash
+lipo -archs artifacts/macos/universal/ShapeForge.App.app/Contents/MacOS/ShapeForge.App
+```
+
+Expected output includes both `arm64` and `x86_64`.
+
+Single-architecture builds are still available:
 
 ```bash
 ./scripts/macos/build-app.sh osx-arm64
-```
-
-For Intel Macs:
-
-```bash
 ./scripts/macos/build-app.sh osx-x64
 ```
 
 ## Run
 
 ```bash
-./scripts/macos/run-app.sh osx-arm64
+./scripts/macos/run-app.sh universal
 ```
+
+You can still run single-architecture outputs with `osx-arm64` or `osx-x64`.
 
 ## Run from Xcode UI (External Build System)
 
@@ -52,7 +69,7 @@ For Intel Macs:
 4. Set Arguments to:
 
    ```text
-   -lc './scripts/macos/build-app.sh osx-arm64'
+   -lc './scripts/macos/build-app.sh universal'
    ```
 
 5. Edit the scheme:
@@ -60,7 +77,7 @@ For Intel Macs:
    - Run action executable: set to
 
      ```text
-     $(SRCROOT)/artifacts/macos/osx-arm64/ShapeForge.App
+     $(SRCROOT)/artifacts/macos/universal/ShapeForge.App.app/Contents/MacOS/ShapeForge.App
      ```
 
 This provides an Xcode-driven build + run loop for local development.
