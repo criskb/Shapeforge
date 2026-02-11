@@ -1,5 +1,5 @@
-using ShapeForge.Core.IO;
 using ShapeForge.Core.Diagnostics;
+using ShapeForge.Core.IO;
 using ShapeForge.Core.Operators;
 using ShapeForge.Core.Pipeline;
 using System.Text.Json;
@@ -117,10 +117,17 @@ static async Task RunFixAsync(string[] args, OperatorRegistry registry)
 
         var runner = new PipelineRunner();
         var steps = ResolvePresetPipeline(preset, parameters, registry);
+
+        var preDiagnostics = ReportCard.Build(mesh);
         var (fixedMesh, reports) = await runner.RunAsync(mesh, steps, ctx, CancellationToken.None);
+        var postDiagnostics = ReportCard.Build(fixedMesh, reports);
+
         await io.SaveStlAsync(output, fixedMesh);
 
         Console.WriteLine($"Saved improved mesh to {output}");
+        PrintDiagnosticsSummary("Pre-fix diagnostics", preDiagnostics);
+        PrintDiagnosticsSummary("Post-fix diagnostics", postDiagnostics);
+
         foreach (var report in reports)
         {
             Console.WriteLine($"[{report.Name}]");
@@ -138,6 +145,11 @@ static async Task RunFixAsync(string[] args, OperatorRegistry registry)
             {
                 Console.WriteLine($"note: {note}");
             }
+        }
+
+        foreach (var issue in postDiagnostics.Issues.Where(i => i.Severity >= IssueSeverity.Warning))
+        {
+            Console.WriteLine($"WARNING: {issue.Code} - {issue.Message}");
         }
     }
     catch (Exception ex)
@@ -192,8 +204,13 @@ static async Task RunDiagnoseAsync(string[] args, OperatorRegistry registry)
         var io = new StlMeshIO();
         var mesh = await io.LoadStlAsync(input);
 
-        var diagnostics = ComputeDiagnostics(mesh, registry);
-        PrintDiagnosticsSummary(input, diagnostics);
+        var diagnostics = ReportCard.Build(mesh);
+        if (!registry.TryGet("repair.fix", out _))
+        {
+            diagnostics.Issues.Add(new DiagnosticIssue(IssueSeverity.Error, "operator.missing", "repair.fix operator is not registered."));
+        }
+
+        PrintDiagnosticsSummary($"Diagnostics for {input}", diagnostics);
 
         if (jsonOutput is not null)
         {
@@ -203,9 +220,20 @@ static async Task RunDiagnoseAsync(string[] args, OperatorRegistry registry)
 
             var payload = new
             {
+                SchemaVersion = diagnostics.SchemaVersion,
                 Input = input,
                 GeneratedAtUtc = DateTime.UtcNow,
-                Diagnostics = diagnostics.Select(d => new { d.Severity, d.Code, d.Message, d.Value })
+                Topology = diagnostics.Topology,
+                Quality = diagnostics.Quality,
+                Printability = diagnostics.Printability,
+                Issues = diagnostics.Issues.Select(i => new
+                {
+                    Severity = i.Severity.ToString(),
+                    i.Code,
+                    i.Message,
+                    i.Count,
+                    i.Details
+                })
             };
 
             await File.WriteAllTextAsync(path, JsonSerializer.Serialize(payload, new JsonSerializerOptions
@@ -215,8 +243,8 @@ static async Task RunDiagnoseAsync(string[] args, OperatorRegistry registry)
             Console.WriteLine($"Wrote diagnostics JSON: {path}");
         }
 
-        var maxSeverity = diagnostics.MaxBy(d => d.Severity)?.Severity ?? DiagnosticSeverity.Info;
-        Environment.ExitCode = maxSeverity >= DiagnosticSeverity.Warning ? 2 : 0;
+        var maxSeverity = diagnostics.Issues.MaxBy(d => d.Severity)?.Severity ?? IssueSeverity.Info;
+        Environment.ExitCode = maxSeverity >= IssueSeverity.Warning ? 2 : 0;
     }
     catch (Exception ex)
     {
@@ -241,45 +269,23 @@ static IReadOnlyList<IOperator> ResolvePresetPipeline(PrintPreset preset, Preset
     return steps;
 }
 
-static IReadOnlyList<DiagnosticFinding> ComputeDiagnostics(ShapeForge.Core.Geometry.MeshModel mesh, OperatorRegistry registry)
+static void PrintDiagnosticsSummary(string title, MeshDiagnostics diagnostics)
 {
-    var findings = new List<DiagnosticFinding>();
-    var triangleCount = mesh.Indices.Length / 3.0;
-    if (triangleCount <= 0)
-    {
-        findings.Add(new DiagnosticFinding(DiagnosticSeverity.Error, "mesh.empty", "Mesh has zero triangles.", triangleCount));
-    }
-    else if (triangleCount < 100)
-    {
-        findings.Add(new DiagnosticFinding(DiagnosticSeverity.Warning, "mesh.low-triangle-count", "Mesh triangle count is very low.", triangleCount));
-    }
-    else
-    {
-        findings.Add(new DiagnosticFinding(DiagnosticSeverity.Info, "mesh.triangle-count", "Mesh triangle count looks normal.", triangleCount));
-    }
+    Console.WriteLine(title);
+    Console.WriteLine($"Schema: {diagnostics.SchemaVersion}");
+    Console.WriteLine($"Topology: triangles={diagnostics.Topology.GetValueOrDefault("triangles.count"):0.###}, vertices={diagnostics.Topology.GetValueOrDefault("vertices.count"):0.###}");
 
-    if (!registry.TryGet("repair.fix", out _))
-    {
-        findings.Add(new DiagnosticFinding(DiagnosticSeverity.Error, "operator.missing", "repair.fix operator is not registered."));
-    }
-
-    return findings;
-}
-
-static void PrintDiagnosticsSummary(string input, IReadOnlyList<DiagnosticFinding> diagnostics)
-{
-    Console.WriteLine($"Diagnostics for {input}");
-    foreach (var finding in diagnostics)
+    foreach (var finding in diagnostics.Issues)
     {
         var prefix = finding.Severity switch
         {
-            DiagnosticSeverity.Error => "ERROR",
-            DiagnosticSeverity.Warning => "WARN ",
+            IssueSeverity.Error => "ERROR",
+            IssueSeverity.Warning => "WARN ",
             _ => "INFO "
         };
 
         Console.WriteLine($"[{prefix}] {finding.Code}: {finding.Message}" +
-                          (finding.Value.HasValue ? $" ({finding.Value.Value:0.###})" : string.Empty));
+                          (finding.Count > 1 ? $" (count={finding.Count})" : string.Empty));
     }
 }
 
@@ -301,15 +307,6 @@ static bool TryReadArgumentValue(string[] args, ref int index, out string? value
     value = candidate;
     return true;
 }
-
-enum DiagnosticSeverity
-{
-    Info,
-    Warning,
-    Error
-}
-
-record DiagnosticFinding(DiagnosticSeverity Severity, string Code, string Message, double? Value = null);
 
 static void PrintHelp()
 {
