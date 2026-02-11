@@ -14,7 +14,45 @@ public static class ReportCard
         var printability = BuildPrintabilityMetrics(reports);
         var issues = BuildIssues(mesh, topology, printability, reports);
 
-        return new MeshDiagnostics(SchemaVersion, topology, quality, printability, issues);
+        var countMetrics = BuildCountMetrics(topology, issues);
+        var booleanFlags = BuildBooleanFlags(topology, quality, issues);
+
+        return new MeshDiagnostics(SchemaVersion, topology, quality, printability, issues, countMetrics, booleanFlags);
+    }
+
+
+    private static Dictionary<string, long> BuildCountMetrics(
+        Dictionary<string, double> topology,
+        List<DiagnosticIssue> issues)
+    {
+        var counts = new Dictionary<string, long>();
+        foreach (var metric in topology)
+        {
+            if (metric.Key.EndsWith(".count", StringComparison.OrdinalIgnoreCase))
+            {
+                counts[metric.Key] = (long)Math.Round(metric.Value);
+            }
+        }
+
+        counts["issues.total"] = issues.Count;
+        counts["issues.warning"] = issues.Count(i => i.Severity == IssueSeverity.Warning);
+        counts["issues.error"] = issues.Count(i => i.Severity == IssueSeverity.Error);
+        return counts;
+    }
+
+    private static Dictionary<string, bool> BuildBooleanFlags(
+        Dictionary<string, double> topology,
+        Dictionary<string, double> quality,
+        List<DiagnosticIssue> issues)
+    {
+        return new Dictionary<string, bool>
+        {
+            ["mesh.has-invalid-indices"] = topology.TryGetValue("indices.invalid.count", out var invalid) && invalid > 0,
+            ["mesh.has-degenerate-triangles"] = topology.TryGetValue("triangles.degenerate.count", out var degenerate) && degenerate > 0,
+            ["mesh.has-duplicate-triangles"] = topology.TryGetValue("triangles.duplicate.count", out var duplicate) && duplicate > 0,
+            ["mesh.normals.missing"] = quality.TryGetValue("normals.missing", out var missingNormals) && missingNormals > 0,
+            ["mesh.has-warnings-or-errors"] = issues.Any(i => i.Severity >= IssueSeverity.Warning)
+        };
     }
 
     private static Dictionary<string, double> BuildTopologyMetrics(MeshModel mesh)
@@ -229,6 +267,8 @@ public static class ReportCard
                         1,
                         new Dictionary<string, string> { ["operator"] = report.Name }));
                 }
+
+                issues.AddRange(report.StructuredIssues);
             }
         }
 

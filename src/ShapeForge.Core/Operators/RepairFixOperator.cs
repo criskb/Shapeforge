@@ -9,6 +9,16 @@ public sealed class RepairFixOperator(float closeRadiusMm = 0.6f, float smoothSt
     public string Id => "repair.fix";
     public string DisplayName => "3D Print Fix";
 
+    public OperatorSchema Schema => new(
+        Id,
+        DisplayName,
+        "1.0",
+        "Repairs mesh topology by welding vertices, removing invalid faces, and optionally filling small holes.",
+        [
+            new OperatorParameterSchema("closeRadiusMm", OperatorParameterType.Number, "Hole closure radius in millimeters.", false, closeRadiusMm, Min: 0),
+            new OperatorParameterSchema("smoothStrength", OperatorParameterType.Number, "Optional smoothing strength hint.", false, smoothStrength, Min: 0)
+        ]);
+
     public Task<(MeshModel mesh, OpReport report)> RunAsync(MeshModel input, OperatorContext ctx, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
