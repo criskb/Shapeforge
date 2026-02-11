@@ -1,5 +1,6 @@
 using ShapeForge.Core.Geometry;
 using ShapeForge.Core.Operators;
+using ShapeForge.Core.Pipeline;
 
 namespace ShapeForge.Tests;
 
@@ -14,7 +15,7 @@ public class ThicknessEnforceOperatorTests
             Normals: null);
 
         var op = new ThicknessEnforceOperator(0.5f, ThicknessMode.Reshell);
-        var ctx = new OperatorContext(0.2f, new Progress<float>(_ => { }), _ => { }, new Dictionary<string, object>());
+        var ctx = new OperatorContext(0.2f, new Progress<float>(_ => { }), _ => { }, new Dictionary<string, object>(), "mm", ProcessMode.Fdm, PresetQuality.Final, MinimumWallPolicy.Strict, 1.2f, 45f, 0f, RepairMode.Balanced);
 
         var (mesh, report) = await op.RunAsync(input, ctx, CancellationToken.None);
 
@@ -33,7 +34,7 @@ public class ThicknessEnforceOperatorTests
             Normals: null);
 
         var op = new ThicknessEnforceOperator(0.5f, ThicknessMode.Inflate);
-        var ctx = new OperatorContext(0.2f, new Progress<float>(_ => { }), _ => { }, new Dictionary<string, object>());
+        var ctx = new OperatorContext(0.2f, new Progress<float>(_ => { }), _ => { }, new Dictionary<string, object>(), "mm", ProcessMode.Fdm, PresetQuality.Final, MinimumWallPolicy.Strict, 1.2f, 45f, 0f, RepairMode.Balanced);
 
         var (meshA, reportA) = await op.RunAsync(input, ctx, CancellationToken.None);
         var (meshB, reportB) = await op.RunAsync(input, ctx, CancellationToken.None);

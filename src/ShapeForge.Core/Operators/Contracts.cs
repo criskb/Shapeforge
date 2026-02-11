@@ -1,4 +1,5 @@
 using ShapeForge.Core.Geometry;
+using ShapeForge.Core.Pipeline;
 
 namespace ShapeForge.Core.Operators;
 
@@ -23,4 +24,12 @@ public record OperatorContext(
     float VoxelSizeMm,
     IProgress<float> Progress,
     Action<string> Log,
-    Dictionary<string, object> Scratch);
+    Dictionary<string, object> Scratch,
+    string Units,
+    ProcessMode Mode,
+    PresetQuality Quality,
+    MinimumWallPolicy MinWallPolicy,
+    float MinWallMm,
+    float OverhangThresholdDeg,
+    float MinimumDrainHoleMm,
+    RepairMode RepairMode);

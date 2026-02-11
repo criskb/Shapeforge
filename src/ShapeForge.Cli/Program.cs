@@ -51,6 +51,10 @@ static async Task RunFixAsync(string[] args, OperatorRegistry registry)
     string? input = null;
     string? output = null;
     var preset = PrintPreset.Fdm;
+    string? unitsOverride = null;
+    ProcessMode? modeOverride = null;
+    PresetQuality? qualityOverride = null;
+    RepairMode? repairModeOverride = null;
 
     for (var i = 0; i < args.Length; i++)
     {
@@ -60,7 +64,7 @@ static async Task RunFixAsync(string[] args, OperatorRegistry registry)
                 if (!TryReadArgumentValue(args, ref i, out input))
                 {
                     Console.Error.WriteLine("Missing value for --in.");
-                    Console.Error.WriteLine("Usage: shapeforge fix --in input.stl --out output.stl [--preset Fdm|Sla|Sls]");
+                    Console.Error.WriteLine("Usage: shapeforge fix --in input.stl --out output.stl [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive]");
                     Environment.ExitCode = 2;
                     return;
                 }
@@ -70,7 +74,7 @@ static async Task RunFixAsync(string[] args, OperatorRegistry registry)
                 if (!TryReadArgumentValue(args, ref i, out output))
                 {
                     Console.Error.WriteLine("Missing value for --out.");
-                    Console.Error.WriteLine("Usage: shapeforge fix --in input.stl --out output.stl [--preset Fdm|Sla|Sls]");
+                    Console.Error.WriteLine("Usage: shapeforge fix --in input.stl --out output.stl [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive]");
                     Environment.ExitCode = 2;
                     return;
                 }
@@ -80,43 +84,125 @@ static async Task RunFixAsync(string[] args, OperatorRegistry registry)
                 if (!TryReadArgumentValue(args, ref i, out var presetRaw))
                 {
                     Console.Error.WriteLine("Missing value for --preset.");
-                    Console.Error.WriteLine("Usage: shapeforge fix --in input.stl --out output.stl [--preset Fdm|Sla|Sls]");
+                    Console.Error.WriteLine("Usage: shapeforge fix --in input.stl --out output.stl [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive]");
                     Environment.ExitCode = 2;
                     return;
                 }
 
-                if (!Enum.TryParse<PrintPreset>(presetRaw, ignoreCase: true, out preset))
+                if (!Presets.TryParsePreset(presetRaw, out preset))
                 {
-                    Console.Error.WriteLine($"Unsupported preset '{presetRaw}'. Use Fdm, Sla, or Sls.");
+                    Console.Error.WriteLine($"Unsupported preset '{presetRaw}'. Use Fdm, Sla/Resin, or Sls.");
                     Environment.ExitCode = 2;
                     return;
                 }
 
+                break;
+            case "--mode":
+                if (!TryReadArgumentValue(args, ref i, out var modeRaw))
+                {
+                    Console.Error.WriteLine("Missing value for --mode.");
+                    Console.Error.WriteLine("Usage: shapeforge fix --in input.stl --out output.stl [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive]");
+                    Environment.ExitCode = 2;
+                    return;
+                }
+
+                if (!Presets.TryParseMode(modeRaw, out var parsedMode))
+                {
+                    Console.Error.WriteLine($"Unsupported mode '{modeRaw}'. Use Fdm, Resin, or Sls.");
+                    Environment.ExitCode = 2;
+                    return;
+                }
+
+                modeOverride = parsedMode;
+                break;
+            case "--quality":
+                if (!TryReadArgumentValue(args, ref i, out var qualityRaw))
+                {
+                    Console.Error.WriteLine("Missing value for --quality.");
+                    Console.Error.WriteLine("Usage: shapeforge fix --in input.stl --out output.stl [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive]");
+                    Environment.ExitCode = 2;
+                    return;
+                }
+
+                if (!Presets.TryParseQuality(qualityRaw, out var parsedQuality))
+                {
+                    Console.Error.WriteLine($"Unsupported quality '{qualityRaw}'. Use Preview or Final.");
+                    Environment.ExitCode = 2;
+                    return;
+                }
+
+                qualityOverride = parsedQuality;
+                break;
+            case "--units":
+                if (!TryReadArgumentValue(args, ref i, out unitsOverride))
+                {
+                    Console.Error.WriteLine("Missing value for --units.");
+                    Console.Error.WriteLine("Usage: shapeforge fix --in input.stl --out output.stl [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive]");
+                    Environment.ExitCode = 2;
+                    return;
+                }
+
+                break;
+            case "--repair-mode":
+                if (!TryReadArgumentValue(args, ref i, out var repairModeRaw))
+                {
+                    Console.Error.WriteLine("Missing value for --repair-mode.");
+                    Console.Error.WriteLine("Usage: shapeforge fix --in input.stl --out output.stl [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive]");
+                    Environment.ExitCode = 2;
+                    return;
+                }
+
+                if (!Presets.TryParseRepairMode(repairModeRaw, out var parsedRepairMode))
+                {
+                    Console.Error.WriteLine($"Unsupported repair mode '{repairModeRaw}'. Use Conservative, Balanced, or Aggressive.");
+                    Environment.ExitCode = 2;
+                    return;
+                }
+
+                repairModeOverride = parsedRepairMode;
                 break;
         }
     }
 
     if (string.IsNullOrWhiteSpace(input) || string.IsNullOrWhiteSpace(output))
     {
-        Console.Error.WriteLine("Usage: shapeforge fix --in input.stl --out output.stl [--preset Fdm|Sla|Sls]");
+        Console.Error.WriteLine("Usage: shapeforge fix --in input.stl --out output.stl [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive]");
         Environment.ExitCode = 2;
         return;
     }
 
     try
     {
-        var parameters = Presets.Resolve(preset);
+        var profile = Presets.Resolve(preset, unitsOverride, modeOverride, qualityOverride, repairModeOverride);
         var io = new StlMeshIO();
         var mesh = await io.LoadStlAsync(input);
 
+        if (!string.IsNullOrWhiteSpace(profile.Units))
+        {
+            mesh = mesh with { Units = profile.Units };
+        }
+
         var ctx = new OperatorContext(
-            parameters.VoxelSizeMm,
+            profile.VoxelSizeMm,
             new Progress<float>(_ => { }),
             Console.WriteLine,
-            new Dictionary<string, object>());
+            new Dictionary<string, object>
+            {
+                ["profile.preset"] = preset.ToString(),
+                ["profile.mode"] = profile.Mode.ToString(),
+                ["profile.quality"] = profile.Quality.ToString()
+            },
+            profile.Units,
+            profile.Mode,
+            profile.Quality,
+            profile.MinWallPolicy,
+            profile.MinWallMm,
+            profile.OverhangThresholdDeg,
+            profile.MinimumDrainHoleMm,
+            profile.RepairMode);
 
         var runner = new PipelineRunner();
-        var steps = ResolvePresetPipeline(preset, parameters, registry);
+        var steps = ResolvePresetPipeline(profile, registry);
 
         var preDiagnostics = ReportCard.Build(mesh);
         var (fixedMesh, reports) = await runner.RunAsync(mesh, steps, ctx, CancellationToken.None);
@@ -253,7 +339,7 @@ static async Task RunDiagnoseAsync(string[] args, OperatorRegistry registry)
     }
 }
 
-static IReadOnlyList<IOperator> ResolvePresetPipeline(PrintPreset preset, PresetParameters parameters, OperatorRegistry registry)
+static IReadOnlyList<IOperator> ResolvePresetPipeline(PresetParameters profile, OperatorRegistry registry)
 {
     var steps = new List<IOperator>();
 
@@ -264,8 +350,7 @@ static IReadOnlyList<IOperator> ResolvePresetPipeline(PrintPreset preset, Preset
 
     steps.Add(repair);
 
-    var thicknessMode = preset == PrintPreset.Sls ? ThicknessMode.Reshell : ThicknessMode.Inflate;
-    steps.Add(new ThicknessEnforceOperator(parameters.MinWallMm, thicknessMode));
+    steps.Add(new ThicknessEnforceOperator(profile.MinWallMm, profile.ThicknessMode));
     return steps;
 }
 
@@ -313,6 +398,6 @@ static void PrintHelp()
     Console.WriteLine("ShapeForge CLI");
     Console.WriteLine("  version                 Show version");
     Console.WriteLine("  operators               List available operators");
-    Console.WriteLine("  fix --in --out [--preset Fdm|Sla|Sls]   Run repair preset on STL");
+    Console.WriteLine("  fix --in --out [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive]");
     Console.WriteLine("  diagnose --in [--json [path]]            Analyze mesh and optionally write JSON");
 }
