@@ -32,7 +32,10 @@ public sealed class RepairFixOperator : IOperator
         ],
         Category: OperatorCategories.RepairMesh,
         Deterministic: true,
-        EstimatedCost: 4.0);
+        EstimatedCost: 4.0,
+        RequiredBackendCapabilities: BackendCapabilityFlags.FastMesh,
+        SupportedModes: [ProcessMode.Fdm, ProcessMode.Resin, ProcessMode.Sls],
+        SupportedQualities: [PresetQuality.Preview, PresetQuality.Final]);
 
     public Task<(MeshModel mesh, OpReport report)> RunAsync(MeshModel input, OperatorContext ctx, CancellationToken ct)
     {

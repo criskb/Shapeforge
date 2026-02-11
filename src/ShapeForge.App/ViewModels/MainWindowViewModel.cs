@@ -139,6 +139,7 @@ public sealed class MainWindowViewModel : ObservableObject
 
         DiagnosticsPanel.Issues.Clear();
         OperatorStack.Operators.Clear();
+        OperatorStack.Warnings.Clear();
         OperatorStack.RaiseSummaryChanged();
         PipelineRun.Steps.Clear();
         PipelineRun.Elapsed = "-";
@@ -170,9 +171,20 @@ public sealed class MainWindowViewModel : ObservableObject
 
     private void BuildStack()
     {
-        _operatorStack = ResolveOperators(ResolveProfile());
+        var profile = ResolveProfile();
+        _operatorStack = ResolveOperators(profile);
+        var warnings = BuildOperatorSupportWarnings(_operatorStack, profile, BackendCapabilityFlags.FastMesh);
+        OperatorStack.Warnings.Clear();
+        foreach (var warning in warnings)
+        {
+            OperatorStack.Warnings.Add(warning);
+        }
+
         CoreToUiMapper.MapOperatorStack(OperatorStack, _operatorStack);
-        MoveToStage(WorkflowStage.StackBuilt, "Operator stack built. Next: Run pipeline.");
+        var message = warnings.Count == 0
+            ? "Operator stack built. Next: Run pipeline."
+            : $"Operator stack built with {warnings.Count} compatibility warning(s). Next: Run pipeline.";
+        MoveToStage(WorkflowStage.StackBuilt, message);
     }
 
     private void Run()
@@ -293,6 +305,27 @@ public sealed class MainWindowViewModel : ObservableObject
         };
 
         return operators;
+    }
+
+    private static List<string> BuildOperatorSupportWarnings(
+        IEnumerable<IOperator> operators,
+        PresetParameters profile,
+        BackendCapabilityFlags availableBackends)
+    {
+        var warnings = new List<string>();
+
+        foreach (var op in operators)
+        {
+            var support = OperatorSupportEvaluator.Evaluate(op.Schema, profile.Mode, profile.Quality, availableBackends);
+            if (support.Level == OperatorSupportLevel.Supported)
+            {
+                continue;
+            }
+
+            warnings.Add($"{op.Id}: {support.Level.ToString().ToLowerInvariant()} ({support.Reason})");
+        }
+
+        return warnings;
     }
 
     private static MeshModel BuildSampleMesh()
