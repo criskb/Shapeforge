@@ -29,6 +29,16 @@
       <TextBlock Text="Volume delta: -" />
       <TextBlock Text="Min thickness: -" />
       <TextBlock Text="Trapped volumes: -" />
+
+      <Separator Margin="0,6,0,6" />
+      <TextBlock Text="Readiness Summary" FontSize="16" FontWeight="SemiBold" />
+      <TextBlock Text="🟡 Status: NeedsAttention" />
+      <TextBlock Text="Top blockers:" FontWeight="SemiBold" />
+      <TextBlock Text="• mesh.not-watertight — Small hole fill recommended" TextWrapping="Wrap" />
+      <TextBlock Text="• readiness.wall-below-profile-min — Increase local wall thickness" TextWrapping="Wrap" />
+      <TextBlock Text="• readiness.high-overhang-ratio — Rotate part / add supports" TextWrapping="Wrap" />
+      <TextBlock Text="Confidence: 82% based on mesh metrics and operator reports" TextWrapping="Wrap" Foreground="#6A6A6A" />
+
       <Button Margin="0,16,0,0" Content="Export STL" />
     </StackPanel>
 

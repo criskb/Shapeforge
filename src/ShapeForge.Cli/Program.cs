@@ -207,12 +207,17 @@ static async Task RunFixAsync(string[] args, OperatorRegistry registry)
         var preDiagnostics = ReportCard.Build(mesh);
         var (fixedMesh, reports) = await runner.RunAsync(mesh, steps, ctx, CancellationToken.None);
         var postDiagnostics = ReportCard.Build(fixedMesh, reports);
+        var evaluator = new ReadinessEvaluator();
+        var preReadiness = evaluator.Evaluate(preDiagnostics, profile);
+        var postReadiness = evaluator.Evaluate(postDiagnostics, profile);
 
         await io.SaveStlAsync(output, fixedMesh);
 
         Console.WriteLine($"Saved improved mesh to {output}");
         PrintDiagnosticsSummary("Pre-fix diagnostics", preDiagnostics);
+        PrintReadinessSummary("Pre-fix readiness summary", preReadiness);
         PrintDiagnosticsSummary("Post-fix diagnostics", postDiagnostics);
+        PrintReadinessSummary("Post-fix readiness summary", postReadiness);
 
         foreach (var report in reports)
         {
@@ -249,6 +254,11 @@ static async Task RunDiagnoseAsync(string[] args, OperatorRegistry registry)
 {
     string? input = null;
     string? jsonOutput = null;
+    var preset = PrintPreset.Fdm;
+    string? unitsOverride = null;
+    ProcessMode? modeOverride = null;
+    PresetQuality? qualityOverride = null;
+    RepairMode? repairModeOverride = null;
 
     for (var i = 0; i < args.Length; i++)
     {
@@ -258,7 +268,7 @@ static async Task RunDiagnoseAsync(string[] args, OperatorRegistry registry)
                 if (!TryReadArgumentValue(args, ref i, out input))
                 {
                     Console.Error.WriteLine("Missing value for --in.");
-                    Console.Error.WriteLine("Usage: shapeforge diagnose --in input.stl [--json [report.json]]");
+                    Console.Error.WriteLine("Usage: shapeforge diagnose --in input.stl [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive] [--json [report.json]]");
                     Environment.ExitCode = 2;
                     return;
                 }
@@ -275,12 +285,93 @@ static async Task RunDiagnoseAsync(string[] args, OperatorRegistry registry)
                 }
 
                 break;
+            case "--preset":
+                if (!TryReadArgumentValue(args, ref i, out var presetRaw))
+                {
+                    Console.Error.WriteLine("Missing value for --preset.");
+                    Console.Error.WriteLine("Usage: shapeforge diagnose --in input.stl [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive] [--json [report.json]]");
+                    Environment.ExitCode = 2;
+                    return;
+                }
+
+                if (!Presets.TryParsePreset(presetRaw, out preset))
+                {
+                    Console.Error.WriteLine($"Unsupported preset '{presetRaw}'. Use Fdm, Sla/Resin, or Sls.");
+                    Environment.ExitCode = 2;
+                    return;
+                }
+
+                break;
+            case "--mode":
+                if (!TryReadArgumentValue(args, ref i, out var modeRaw))
+                {
+                    Console.Error.WriteLine("Missing value for --mode.");
+                    Console.Error.WriteLine("Usage: shapeforge diagnose --in input.stl [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive] [--json [report.json]]");
+                    Environment.ExitCode = 2;
+                    return;
+                }
+
+                if (!Presets.TryParseMode(modeRaw, out var parsedMode))
+                {
+                    Console.Error.WriteLine($"Unsupported mode '{modeRaw}'. Use Fdm, Resin, or Sls.");
+                    Environment.ExitCode = 2;
+                    return;
+                }
+
+                modeOverride = parsedMode;
+                break;
+            case "--quality":
+                if (!TryReadArgumentValue(args, ref i, out var qualityRaw))
+                {
+                    Console.Error.WriteLine("Missing value for --quality.");
+                    Console.Error.WriteLine("Usage: shapeforge diagnose --in input.stl [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive] [--json [report.json]]");
+                    Environment.ExitCode = 2;
+                    return;
+                }
+
+                if (!Presets.TryParseQuality(qualityRaw, out var parsedQuality))
+                {
+                    Console.Error.WriteLine($"Unsupported quality '{qualityRaw}'. Use Preview or Final.");
+                    Environment.ExitCode = 2;
+                    return;
+                }
+
+                qualityOverride = parsedQuality;
+                break;
+            case "--units":
+                if (!TryReadArgumentValue(args, ref i, out unitsOverride))
+                {
+                    Console.Error.WriteLine("Missing value for --units.");
+                    Console.Error.WriteLine("Usage: shapeforge diagnose --in input.stl [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive] [--json [report.json]]");
+                    Environment.ExitCode = 2;
+                    return;
+                }
+
+                break;
+            case "--repair-mode":
+                if (!TryReadArgumentValue(args, ref i, out var repairModeRaw))
+                {
+                    Console.Error.WriteLine("Missing value for --repair-mode.");
+                    Console.Error.WriteLine("Usage: shapeforge diagnose --in input.stl [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive] [--json [report.json]]");
+                    Environment.ExitCode = 2;
+                    return;
+                }
+
+                if (!Presets.TryParseRepairMode(repairModeRaw, out var parsedRepairMode))
+                {
+                    Console.Error.WriteLine($"Unsupported repair mode '{repairModeRaw}'. Use Conservative, Balanced, or Aggressive.");
+                    Environment.ExitCode = 2;
+                    return;
+                }
+
+                repairModeOverride = parsedRepairMode;
+                break;
         }
     }
 
     if (string.IsNullOrWhiteSpace(input))
     {
-        Console.Error.WriteLine("Usage: shapeforge diagnose --in input.stl [--json [report.json]]");
+        Console.Error.WriteLine("Usage: shapeforge diagnose --in input.stl [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive] [--json [report.json]]");
         Environment.ExitCode = 2;
         return;
     }
@@ -289,6 +380,8 @@ static async Task RunDiagnoseAsync(string[] args, OperatorRegistry registry)
     {
         var io = new StlMeshIO();
         var mesh = await io.LoadStlAsync(input);
+        var profile = Presets.Resolve(preset, unitsOverride, modeOverride, qualityOverride, repairModeOverride);
+        var evaluator = new ReadinessEvaluator();
 
         var diagnostics = ReportCard.Build(mesh);
         if (!registry.TryGet("repair.fix", out _))
@@ -297,6 +390,8 @@ static async Task RunDiagnoseAsync(string[] args, OperatorRegistry registry)
         }
 
         PrintDiagnosticsSummary($"Diagnostics for {input}", diagnostics);
+        var readiness = evaluator.Evaluate(diagnostics, profile);
+        PrintReadinessSummary("Readiness summary", readiness);
 
         if (jsonOutput is not null)
         {
@@ -309,6 +404,14 @@ static async Task RunDiagnoseAsync(string[] args, OperatorRegistry registry)
                 SchemaVersion = diagnostics.SchemaVersion,
                 Input = input,
                 GeneratedAtUtc = DateTime.UtcNow,
+                Readiness = new
+                {
+                    Status = readiness.Status.ToString(),
+                    Grade = readiness.Grade.ToString(),
+                    TopBlockers = readiness.TopBlockers.Select(b => new { b.Code, b.Message, b.RemediationHint }),
+                    readiness.ConfidenceNote,
+                    readiness.ConfidenceScore
+                },
                 Topology = diagnostics.Topology,
                 Quality = diagnostics.Quality,
                 Printability = diagnostics.Printability,
@@ -374,6 +477,34 @@ static void PrintDiagnosticsSummary(string title, MeshDiagnostics diagnostics)
     }
 }
 
+static void PrintReadinessSummary(string title, ReadinessResult readiness)
+{
+    Console.WriteLine(title);
+    var status = readiness.Status switch
+    {
+        ReadinessTrafficLight.Green => "🟢",
+        ReadinessTrafficLight.Yellow => "🟡",
+        _ => "🔴"
+    };
+
+    Console.WriteLine($"{status} Status: {readiness.Status} ({readiness.Grade})");
+    if (readiness.TopBlockers.Count == 0)
+    {
+        Console.WriteLine("Top blockers: none");
+    }
+    else
+    {
+        Console.WriteLine("Top blockers:");
+        foreach (var blocker in readiness.TopBlockers)
+        {
+            Console.WriteLine($" - {blocker.Code}: {blocker.Message}");
+            Console.WriteLine($"   fix: {blocker.RemediationHint}");
+        }
+    }
+
+    Console.WriteLine($"Confidence note: {readiness.ConfidenceNote}");
+}
+
 static bool TryReadArgumentValue(string[] args, ref int index, out string? value)
 {
     value = null;
@@ -399,5 +530,5 @@ static void PrintHelp()
     Console.WriteLine("  version                 Show version");
     Console.WriteLine("  operators               List available operators");
     Console.WriteLine("  fix --in --out [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive]");
-    Console.WriteLine("  diagnose --in [--json [path]]            Analyze mesh and optionally write JSON");
+    Console.WriteLine("  diagnose --in [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive] [--json [path]]");
 }
