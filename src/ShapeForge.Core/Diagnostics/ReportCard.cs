@@ -50,6 +50,8 @@ public static class ReportCard
             ["mesh.has-invalid-indices"] = topology.TryGetValue("indices.invalid.count", out var invalid) && invalid > 0,
             ["mesh.has-degenerate-triangles"] = topology.TryGetValue("triangles.degenerate.count", out var degenerate) && degenerate > 0,
             ["mesh.has-duplicate-triangles"] = topology.TryGetValue("triangles.duplicate.count", out var duplicate) && duplicate > 0,
+            ["mesh.is-watertight"] = topology.TryGetValue("mesh.is-watertight", out var watertight) && watertight > 0,
+            ["mesh.is-manifold"] = topology.TryGetValue("mesh.is-manifold", out var manifold) && manifold > 0,
             ["mesh.normals.missing"] = quality.TryGetValue("normals.missing", out var missingNormals) && missingNormals > 0,
             ["mesh.has-warnings-or-errors"] = issues.Any(i => i.Severity >= IssueSeverity.Warning)
         };
@@ -63,6 +65,7 @@ public static class ReportCard
         var degenerateCount = 0;
         var duplicateCount = 0;
         var invalidIndexCount = 0;
+        var edgeUseCounts = new Dictionary<(int a, int b), int>();
 
         var faces = new HashSet<(int a, int b, int c)>();
         for (var i = 0; i + 2 < mesh.Indices.Length; i += 3)
@@ -88,7 +91,16 @@ public static class ReportCard
             {
                 duplicateCount++;
             }
+
+            CountEdge(edgeUseCounts, ia, ib);
+            CountEdge(edgeUseCounts, ib, ic);
+            CountEdge(edgeUseCounts, ic, ia);
         }
+
+        var boundaryEdges = edgeUseCounts.Count(e => e.Value == 1);
+        var nonManifoldEdges = edgeUseCounts.Count(e => e.Value > 2);
+        var isWatertight = triangleCount > 0 && boundaryEdges == 0 && invalidIndexCount == 0;
+        var isManifold = triangleCount > 0 && nonManifoldEdges == 0 && invalidIndexCount == 0;
 
         return new Dictionary<string, double>
         {
@@ -97,6 +109,10 @@ public static class ReportCard
             ["indices.invalid.count"] = invalidIndexCount,
             ["triangles.degenerate.count"] = degenerateCount,
             ["triangles.duplicate.count"] = duplicateCount,
+            ["edges.boundary.count"] = boundaryEdges,
+            ["edges.nonmanifold.count"] = nonManifoldEdges,
+            ["mesh.is-watertight"] = isWatertight ? 1 : 0,
+            ["mesh.is-manifold"] = isManifold ? 1 : 0,
             ["bounds.min.x"] = minX,
             ["bounds.min.y"] = minY,
             ["bounds.min.z"] = minZ,
@@ -239,6 +255,18 @@ public static class ReportCard
             issues.Add(new DiagnosticIssue(IssueSeverity.Warning, "mesh.duplicate-triangles", "Mesh contains duplicate triangles.", duplicateCount));
         }
 
+        if (topology.TryGetValue("mesh.is-watertight", out var watertight) && watertight < 0.5)
+        {
+            var boundaryEdges = topology.GetValueOrDefault("edges.boundary.count");
+            issues.Add(new DiagnosticIssue(IssueSeverity.Error, "mesh.not-watertight", "Mesh is not watertight and may leak volume assumptions.", Math.Max(1, (int)Math.Round(boundaryEdges))));
+        }
+
+        if (topology.TryGetValue("mesh.is-manifold", out var manifold) && manifold < 0.5)
+        {
+            var nonManifoldEdges = topology.GetValueOrDefault("edges.nonmanifold.count");
+            issues.Add(new DiagnosticIssue(IssueSeverity.Error, "mesh.non-manifold", "Mesh contains non-manifold edges.", Math.Max(1, (int)Math.Round(nonManifoldEdges))));
+        }
+
         if (mesh.Normals is null || mesh.Normals.Length == 0)
         {
             issues.Add(new DiagnosticIssue(IssueSeverity.Info, "mesh.normals.missing", "Mesh normals are missing and may be regenerated."));
@@ -293,6 +321,13 @@ public static class ReportCard
         }
 
         return (ia, ib, ic);
+    }
+
+    private static void CountEdge(Dictionary<(int a, int b), int> edgeUseCounts, int ia, int ib)
+    {
+        var edge = ia <= ib ? (ia, ib) : (ib, ia);
+        edgeUseCounts.TryGetValue(edge, out var count);
+        edgeUseCounts[edge] = count + 1;
     }
 
     private static double Distance((float x, float y, float z) a, (float x, float y, float z) b)

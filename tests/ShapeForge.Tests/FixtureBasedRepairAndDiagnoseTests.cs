@@ -30,7 +30,7 @@ public class FixtureBasedRepairAndDiagnoseTests
 
         Assert.True(nonmanifoldDiagnostics.HasWarningsOrErrors);
         Assert.Contains(nonmanifoldDiagnostics.Issues, i => i.Code == "mesh.low-triangle-count" && i.Count == 4);
-        Assert.DoesNotContain(nonmanifoldDiagnostics.Issues, i => i.Severity == IssueSeverity.Error);
+        Assert.Contains(nonmanifoldDiagnostics.Issues, i => i.Code == "mesh.not-watertight" && i.Severity == IssueSeverity.Error);
     }
 
     [Fact]
