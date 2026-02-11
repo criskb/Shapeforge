@@ -128,6 +128,16 @@ static async Task RunFixAsync(string[] args, OperatorRegistry registry)
             {
                 Console.WriteLine($"{metric.Key}: {metric.Value}");
             }
+
+            foreach (var warning in report.Warnings)
+            {
+                Console.WriteLine($"WARNING: {warning}");
+            }
+
+            foreach (var note in report.Notes)
+            {
+                Console.WriteLine($"note: {note}");
+            }
         }
     }
     catch (Exception ex)
