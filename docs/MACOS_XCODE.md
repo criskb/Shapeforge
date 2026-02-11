@@ -27,6 +27,18 @@ Build a **universal** macOS app (Apple Silicon + Intel):
 ./scripts/macos/build-app.sh universal
 ```
 
+Build a **full production** universal app (Release + self-contained + ReadyToRun):
+
+```bash
+./scripts/macos/build-full-app.sh
+```
+
+Or explicitly:
+
+```bash
+./scripts/macos/build-app.sh universal full
+```
+
 This produces:
 
 ```text
@@ -53,6 +65,12 @@ Single-architecture builds are still available:
 
 ```bash
 ./scripts/macos/run-app.sh universal
+```
+
+Run and auto-build full profile when needed:
+
+```bash
+./scripts/macos/run-app.sh universal full
 ```
 
 You can still run single-architecture outputs with `osx-arm64` or `osx-x64`.

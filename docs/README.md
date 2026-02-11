@@ -22,3 +22,4 @@ shapeforge fix --in input.stl --out improved.stl --preset Fdm
 
 For macOS build/run instructions using Xcode tooling, see `docs/MACOS_XCODE.md`.
 The default macOS workflow now builds a universal app bundle supporting both Apple Silicon and Intel Macs via per-architecture payloads in one `.app`.
+To build the full distributable app, run `./scripts/macos/build-full-app.sh`.

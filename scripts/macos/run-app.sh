@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 RID="${1:-universal}"
+PROFILE="${2:-dev}"
 
 if [[ "$RID" == "universal" ]]; then
   APP_BUNDLE="$REPO_ROOT/artifacts/macos/universal/ShapeForge.App.app"
@@ -12,7 +13,7 @@ if [[ "$RID" == "universal" ]]; then
 
   if [[ ! -x "$APP_BIN" ]]; then
     echo "Universal build output not found. Running build first..."
-    "$SCRIPT_DIR/build-app.sh" universal
+    "$SCRIPT_DIR/build-app.sh" universal "$PROFILE"
   fi
 
   exec "$APP_BIN"
@@ -21,7 +22,7 @@ else
 
   if [[ ! -x "$APP_BIN" ]]; then
     echo "Build output not found. Running build first..."
-    "$SCRIPT_DIR/build-app.sh" "$RID"
+    "$SCRIPT_DIR/build-app.sh" "$RID" "$PROFILE"
   fi
 
   exec "$APP_BIN"

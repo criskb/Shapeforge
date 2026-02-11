@@ -5,19 +5,43 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 RID="${1:-universal}"
+PROFILE="${2:-dev}"
 CONFIG="${CONFIGURATION:-Debug}"
 OUT_ROOT="$REPO_ROOT/artifacts/macos"
+
+SELF_CONTAINED="false"
+PUBLISH_READYTORUN="false"
+PUBLISH_SINGLE_FILE="false"
+
+case "$PROFILE" in
+  dev)
+    ;;
+  release)
+    CONFIG="Release"
+    ;;
+  full)
+    CONFIG="Release"
+    SELF_CONTAINED="true"
+    PUBLISH_READYTORUN="true"
+    ;;
+  *)
+    echo "error: profile must be one of: dev, release, full" >&2
+    exit 2
+    ;;
+esac
 
 publish_rid() {
   local rid="$1"
   local out_dir="$OUT_ROOT/$rid"
 
-  echo "Building ShapeForge.App for $rid ($CONFIG)..."
+  echo "Building ShapeForge.App for $rid ($CONFIG, profile=$PROFILE)..."
   dotnet publish "$REPO_ROOT/src/ShapeForge.App/ShapeForge.App.csproj" \
     -c "$CONFIG" \
     -r "$rid" \
-    --self-contained false \
+    --self-contained "$SELF_CONTAINED" \
     -p:UseAppHost=true \
+    -p:PublishReadyToRun="$PUBLISH_READYTORUN" \
+    -p:PublishSingleFile="$PUBLISH_SINGLE_FILE" \
     -o "$out_dir"
 
   echo "Build complete: $out_dir"
@@ -107,6 +131,7 @@ PLIST
   echo "Contains per-arch payloads:"
   echo "  - $CONTENTS_DIR/Resources/osx-arm64"
   echo "  - $CONTENTS_DIR/Resources/osx-x64"
+  echo "Profile: $PROFILE"
 else
   publish_rid "$RID"
 fi
