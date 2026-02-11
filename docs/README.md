@@ -17,3 +17,7 @@ This repository is bootstrapped with:
 shapeforge operators
 shapeforge fix --in input.stl --out improved.stl --preset Fdm
 ```
+
+## macOS + Xcode
+
+For macOS build/run instructions using Xcode tooling, see `docs/MACOS_XCODE.md`.

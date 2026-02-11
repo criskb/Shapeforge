@@ -24,7 +24,7 @@ public sealed class StlMeshIO : IMeshIO
     public async Task SaveStlAsync(string path, MeshModel mesh, CancellationToken ct = default)
     {
         await using var stream = File.Create(path);
-        await using var writer = new BinaryWriter(stream);
+        using var writer = new BinaryWriter(stream);
 
         var header = new byte[80];
         Array.Copy(System.Text.Encoding.ASCII.GetBytes("ShapeForge STL Export"), header, 20);
@@ -46,7 +46,8 @@ public sealed class StlMeshIO : IMeshIO
             writer.Write((ushort)0);
         }
 
-        await writer.FlushAsync();
+        writer.Flush();
+        await stream.FlushAsync(ct);
     }
 
     private static bool IsLikelyAscii(Stream stream)

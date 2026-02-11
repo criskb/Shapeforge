@@ -19,3 +19,8 @@
 dotnet build ShapeForge.sln
 dotnet test ShapeForge.sln
 ```
+
+## macOS/Xcode workflow
+
+- Use `scripts/macos/build-app.sh` and `scripts/macos/run-app.sh`.
+- Full setup is documented in `docs/MACOS_XCODE.md`.
