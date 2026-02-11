@@ -1,3 +1,4 @@
+using ShapeForge.Core.Backends;
 using ShapeForge.Core.Diagnostics;
 using ShapeForge.Core.Geometry;
 using System.Numerics;
@@ -10,8 +11,19 @@ public enum ThicknessMode
     Reshell
 }
 
-public sealed class ThicknessEnforceOperator(float minimumMm, ThicknessMode mode) : IOperator
+public sealed class ThicknessEnforceOperator : IOperator
 {
+    private readonly float _minimumMm;
+    private readonly ThicknessMode _mode;
+    private readonly IVolumeBackend _volumeBackend;
+
+    public ThicknessEnforceOperator(float minimumMm, ThicknessMode mode, IVolumeBackend? volumeBackend = null)
+    {
+        _minimumMm = minimumMm;
+        _mode = mode;
+        _volumeBackend = volumeBackend ?? new NullVolumeBackend();
+    }
+
     public string Id => "thickness.enforce";
     public string DisplayName => "Minimum Wall Thickness";
 
@@ -21,8 +33,8 @@ public sealed class ThicknessEnforceOperator(float minimumMm, ThicknessMode mode
         "1.0",
         "Detects and optionally inflates regions that violate a minimum wall thickness target.",
         [
-            new OperatorParameterSchema("minimumMm", OperatorParameterType.Number, "Minimum target wall thickness in millimeters.", true, minimumMm, Min: 0),
-            new OperatorParameterSchema("mode", OperatorParameterType.Enum, "How enforcement is applied.", true, mode.ToString(), AllowedValues: Enum.GetNames<ThicknessMode>())
+            new OperatorParameterSchema("minimumMm", OperatorParameterType.Number, "Minimum target wall thickness in millimeters.", true, _minimumMm, Min: 0),
+            new OperatorParameterSchema("mode", OperatorParameterType.Enum, "How enforcement is applied.", true, _mode.ToString(), AllowedValues: Enum.GetNames<ThicknessMode>())
         ]);
 
     public Task<(MeshModel mesh, OpReport report)> RunAsync(MeshModel input, OperatorContext ctx, CancellationToken ct)
@@ -33,26 +45,40 @@ public sealed class ThicknessEnforceOperator(float minimumMm, ThicknessMode mode
 
         ctx.Progress.Report(0.35f);
         var nearestNeighborDistances = ComputeNearestNeighborDistances(vertices);
-        var thinBefore = nearestNeighborDistances.Count(d => d > 0f && d < minimumMm);
+        var thinBefore = nearestNeighborDistances.Count(d => d > 0f && d < _minimumMm);
         var observedMin = nearestNeighborDistances.Count == 0 ? 0f : nearestNeighborDistances.Where(d => d > 0f).DefaultIfEmpty(0f).Min();
 
         var warnings = new List<string>();
-        var notes = new List<string> { $"mode={mode}" };
+        var notes = new List<string> { $"mode={_mode}" };
         var output = input with { };
 
-        var attemptedEnforcement = mode == ThicknessMode.Inflate;
+        var attemptedEnforcement = _mode == ThicknessMode.Inflate;
         var appliedVertices = vertices;
         var geometryEdited = false;
 
         if (attemptedEnforcement && thinBefore > 0)
         {
-            var (inflated, movedCount) = InflateThinRegions(vertices, nearestNeighborDistances, minimumMm);
-            if (movedCount > 0)
+            var backendResult = _volumeBackend.Offset(input, _minimumMm * 0.5f, ctx.VoxelSizeMm);
+            warnings.AddRange(backendResult.Warnings);
+
+            if (backendResult.Applied)
             {
-                appliedVertices = inflated;
+                output = backendResult.Mesh;
+                appliedVertices = ToVectors(output.Vertices);
                 geometryEdited = true;
-                output = new MeshModel(Flatten(appliedVertices), input.Indices.ToArray(), input.Normals?.ToArray(), input.Units);
-                notes.Add($"inflate.adjusted.vertices={movedCount}");
+                notes.Add("inflation performed by volume backend offset operation");
+            }
+            else
+            {
+                var (inflated, movedCount) = InflateThinRegions(vertices, nearestNeighborDistances, _minimumMm);
+                if (movedCount > 0)
+                {
+                    appliedVertices = inflated;
+                    geometryEdited = true;
+                    output = new MeshModel(Flatten(appliedVertices), input.Indices.ToArray(), input.Normals?.ToArray(), input.Units);
+                    notes.Add($"inflate.adjusted.vertices={movedCount}");
+                    notes.Add("used managed fallback because volume backend did not apply");
+                }
             }
         }
 
@@ -66,11 +92,11 @@ public sealed class ThicknessEnforceOperator(float minimumMm, ThicknessMode mode
                 "thickness.enforcement.skipped",
                 "Thickness enforcement did not modify the mesh; detection metrics only.",
                 1,
-                new Dictionary<string, string> { ["mode"] = mode.ToString() }));
+                new Dictionary<string, string> { ["mode"] = _mode.ToString() }));
         }
 
         var afterDistances = ComputeNearestNeighborDistances(appliedVertices);
-        var thinAfter = afterDistances.Count(d => d > 0f && d < minimumMm);
+        var thinAfter = afterDistances.Count(d => d > 0f && d < _minimumMm);
         var observedMinAfter = afterDistances.Count == 0 ? 0f : afterDistances.Where(d => d > 0f).DefaultIfEmpty(0f).Min();
 
         ctx.Progress.Report(1);
@@ -78,7 +104,7 @@ public sealed class ThicknessEnforceOperator(float minimumMm, ThicknessMode mode
             DisplayName,
             new Dictionary<string, double>
             {
-                ["min.thickness.target.mm"] = minimumMm,
+                ["min.thickness.target.mm"] = _minimumMm,
                 ["triangles.sampled"] = triangleCount,
                 ["thin.vertices.before"] = thinBefore,
                 ["thin.vertices.after"] = thinAfter,
