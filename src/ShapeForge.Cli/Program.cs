@@ -7,6 +7,7 @@ using System.Text.Json;
 var registry = new OperatorRegistry();
 registry.Register(new RepairFixOperator());
 registry.Register(new ThicknessEnforceOperator(1.2f, ThicknessMode.Inflate));
+registry.RegisterCompatibilityMap(DeprecatedOperatorIds.Map);
 
 if (args.Length == 0 || args[0] is "help" or "--help" or "-h")
 {
@@ -24,11 +25,7 @@ switch (args[0])
 
     case "operators":
     case "list-operators":
-        foreach (var op in registry.List())
-        {
-            Console.WriteLine($"{op.Id} :: {op.DisplayName}");
-        }
-
+        RunOperatorsCommand(args.Skip(1).ToArray(), registry);
         break;
 
     case "fix":
@@ -384,9 +381,9 @@ static async Task RunDiagnoseAsync(string[] args, OperatorRegistry registry)
         var evaluator = new ReadinessEvaluator();
 
         var diagnostics = ReportCard.Build(mesh);
-        if (!registry.TryGet("repair.fix", out _))
+        if (!registry.TryGet(RepairFixOperator.CanonicalId, out _))
         {
-            diagnostics.Issues.Add(new DiagnosticIssue(IssueSeverity.Error, "operator.missing", "repair.fix operator is not registered."));
+            diagnostics.Issues.Add(new DiagnosticIssue(IssueSeverity.Error, "operator.missing", $"{RepairFixOperator.CanonicalId} operator is not registered."));
         }
 
         PrintDiagnosticsSummary($"Diagnostics for {input}", diagnostics);
@@ -446,9 +443,9 @@ static IReadOnlyList<IOperator> ResolvePresetPipeline(PresetParameters profile, 
 {
     var steps = new List<IOperator>();
 
-    if (!registry.TryGet("repair.fix", out var repair) || repair is null)
+    if (!registry.TryGet(RepairFixOperator.CanonicalId, out var repair) || repair is null)
     {
-        throw new InvalidOperationException("repair.fix is not registered.");
+        throw new InvalidOperationException($"{RepairFixOperator.CanonicalId} is not registered.");
     }
 
     steps.Add(repair);
@@ -474,6 +471,96 @@ static void PrintDiagnosticsSummary(string title, MeshDiagnostics diagnostics)
 
         Console.WriteLine($"[{prefix}] {finding.Code}: {finding.Message}" +
                           (finding.Count > 1 ? $" (count={finding.Count})" : string.Empty));
+    }
+}
+
+
+static void RunOperatorsCommand(string[] args, OperatorRegistry registry)
+{
+    var format = "table";
+    for (var i = 0; i < args.Length; i++)
+    {
+        if (args[i] == "--format")
+        {
+            if (!TryReadArgumentValue(args, ref i, out var rawFormat))
+            {
+                Console.Error.WriteLine("Missing value for --format. Use table or json.");
+                Environment.ExitCode = 2;
+                return;
+            }
+
+            format = rawFormat ?? "table";
+            continue;
+        }
+
+        Console.Error.WriteLine($"Unknown option for operators command: {args[i]}");
+        Environment.ExitCode = 2;
+        return;
+    }
+
+    var operators = registry.List()
+        .Select(op =>
+        {
+            var schema = op.Schema;
+            return new
+            {
+                id = op.Id,
+                displayName = op.DisplayName,
+                category = schema.Category,
+                deterministic = schema.Deterministic,
+                estimatedCost = schema.EstimatedCost,
+                version = schema.Version,
+                description = schema.Description,
+                parameters = schema.Parameters
+            };
+        })
+        .ToArray();
+
+    var compatibility = registry.CompatibilityMap
+        .OrderBy(kvp => kvp.Key, StringComparer.OrdinalIgnoreCase)
+        .Select(kvp => new { oldId = kvp.Key, newId = kvp.Value })
+        .ToArray();
+
+    if (format.Equals("json", StringComparison.OrdinalIgnoreCase))
+    {
+        var payload = new
+        {
+            operators,
+            compatibility
+        };
+
+        Console.WriteLine(JsonSerializer.Serialize(payload, new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            WriteIndented = true
+        }));
+
+        return;
+    }
+
+    if (!format.Equals("table", StringComparison.OrdinalIgnoreCase))
+    {
+        Console.Error.WriteLine($"Unknown format '{format}'. Use table or json.");
+        Environment.ExitCode = 2;
+        return;
+    }
+
+    foreach (var op in operators)
+    {
+        Console.WriteLine($"{op.id} :: {op.displayName}");
+        Console.WriteLine($"  category: {op.category}");
+        Console.WriteLine($"  deterministic: {op.deterministic}");
+        Console.WriteLine($"  estimated-cost: {op.estimatedCost:0.###}");
+        Console.WriteLine($"  params: {op.parameters.Length}");
+    }
+
+    if (compatibility.Length > 0)
+    {
+        Console.WriteLine("compatibility:");
+        foreach (var entry in compatibility)
+        {
+            Console.WriteLine($"  {entry.oldId} -> {entry.newId}");
+        }
     }
 }
 
@@ -528,7 +615,7 @@ static void PrintHelp()
 {
     Console.WriteLine("ShapeForge CLI");
     Console.WriteLine("  version                 Show version");
-    Console.WriteLine("  operators               List available operators");
+    Console.WriteLine("  operators [--format table|json]  List available operators");
     Console.WriteLine("  fix --in --out [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive]");
     Console.WriteLine("  diagnose --in [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive] [--json [path]]");
 }

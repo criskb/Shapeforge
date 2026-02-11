@@ -24,7 +24,8 @@ public sealed class ThicknessEnforceOperator : IOperator
         _volumeBackend = volumeBackend ?? new NullVolumeBackend();
     }
 
-    public string Id => "thickness.enforce";
+    public const string CanonicalId = "prep.fdm.thickness.enforce";
+    public string Id => CanonicalId;
     public string DisplayName => "Minimum Wall Thickness";
 
     public OperatorSchema Schema => new(
@@ -35,7 +36,10 @@ public sealed class ThicknessEnforceOperator : IOperator
         [
             new OperatorParameterSchema("minimumMm", OperatorParameterType.Number, "Minimum target wall thickness in millimeters.", true, _minimumMm, Min: 0),
             new OperatorParameterSchema("mode", OperatorParameterType.Enum, "How enforcement is applied.", true, _mode.ToString(), AllowedValues: Enum.GetNames<ThicknessMode>())
-        ]);
+        ],
+        Category: OperatorCategories.PrepFdmThickness,
+        Deterministic: true,
+        EstimatedCost: 7.5);
 
     public Task<(MeshModel mesh, OpReport report)> RunAsync(MeshModel input, OperatorContext ctx, CancellationToken ct)
     {

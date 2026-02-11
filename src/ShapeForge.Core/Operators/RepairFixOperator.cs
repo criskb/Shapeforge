@@ -17,7 +17,8 @@ public sealed class RepairFixOperator : IOperator
         _geometryBackend = geometryBackend ?? new DefaultMeshBackend();
     }
 
-    public string Id => "repair.fix";
+    public const string CanonicalId = "repair.fix";
+    public string Id => CanonicalId;
     public string DisplayName => "3D Print Fix";
 
     public OperatorSchema Schema => new(
@@ -28,7 +29,10 @@ public sealed class RepairFixOperator : IOperator
         [
             new OperatorParameterSchema("closeRadiusMm", OperatorParameterType.Number, "Hole closure radius in millimeters.", false, _closeRadiusMm, Min: 0),
             new OperatorParameterSchema("smoothStrength", OperatorParameterType.Number, "Optional smoothing strength hint.", false, _smoothStrength, Min: 0)
-        ]);
+        ],
+        Category: OperatorCategories.RepairMesh,
+        Deterministic: true,
+        EstimatedCost: 4.0);
 
     public Task<(MeshModel mesh, OpReport report)> RunAsync(MeshModel input, OperatorContext ctx, CancellationToken ct)
     {
