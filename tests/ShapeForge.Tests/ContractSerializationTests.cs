@@ -66,7 +66,9 @@ public class ContractSerializationTests
             Metrics: new Dictionary<string, double> { ["thin.vertices.after"] = 1 },
             Warnings: ["thin wall warning"],
             Notes: ["details"],
-            Issues: [new DiagnosticIssue(IssueSeverity.Warning, "thin", "thin wall", 1)]);
+            Issues: [new DiagnosticIssue(IssueSeverity.Warning, "thin", "thin wall", 1)],
+            ModeAdjustedParams: new Dictionary<string, double> { ["sampling.density.scale"] = 0.7 },
+            Elapsed: TimeSpan.FromMilliseconds(10));
 
         var schema = new OperatorSchema(
             "thickness.enforce",
@@ -80,15 +82,18 @@ public class ContractSerializationTests
             null,
             null,
             [report],
-            TimeSpan.FromMilliseconds(123));
+            TimeSpan.FromMilliseconds(123),
+            new Dictionary<string, TimeSpan> { ["thickness.enforce"] = TimeSpan.FromMilliseconds(10) });
 
         var reportJson = JsonSerializer.Serialize(report, JsonOptions);
         var schemaJson = JsonSerializer.Serialize(schema, JsonOptions);
         var pipelineJson = JsonSerializer.Serialize(run, JsonOptions);
 
         Assert.Contains("\"issues\"", reportJson);
+        Assert.Contains("\"modeAdjustedParams\"", reportJson);
         Assert.Contains("\"parameters\"", schemaJson);
         Assert.Contains("\"elapsed\"", pipelineJson);
+        Assert.Contains("\"stepElapsed\"", pipelineJson);
         Assert.NotNull(JsonSerializer.Deserialize<OpReport>(reportJson, JsonOptions));
         Assert.NotNull(JsonSerializer.Deserialize<OperatorSchema>(schemaJson, JsonOptions));
         Assert.NotNull(JsonSerializer.Deserialize<PipelineRunResult>(pipelineJson, JsonOptions));

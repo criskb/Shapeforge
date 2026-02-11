@@ -34,19 +34,49 @@ public sealed class PipelineRunner
         var stopwatch = Stopwatch.StartNew();
         var current = input;
         var reports = new List<OpReport>();
+        var stepElapsed = new Dictionary<string, TimeSpan>(StringComparer.OrdinalIgnoreCase);
         var preDiagnostics = includeDiagnostics ? ReportCard.Build(input) : null;
 
         foreach (var step in steps)
         {
             ct.ThrowIfCancellationRequested();
-            context.Log($"Running {step.Id}...");
-            var result = await step.RunAsync(current, context, ct);
+            context.Progress.Report(0f);
+            context.Log($"Running {step.Id} ({context.ExecutionMode})...");
+
+            var perOperatorPolicy = context.ScalingPolicy.ForOperator(step.Id);
+            var opContext = context with
+            {
+                ScalingPolicy = perOperatorPolicy,
+                VoxelSizeMm = MathF.Max(0.0001f, context.VoxelSizeMm * perOperatorPolicy.VoxelSizeScale)
+            };
+
+            var stepStopwatch = Stopwatch.StartNew();
+            var result = await step.RunAsync(current, opContext, ct);
+            stepStopwatch.Stop();
+            ct.ThrowIfCancellationRequested();
+
             current = result.mesh;
-            reports.Add(result.report);
+            var adjustedParams = BuildModeAdjustedParams(opContext, step.Id);
+            reports.Add(result.report with { ModeAdjustedParams = adjustedParams, Elapsed = stepStopwatch.Elapsed });
+            stepElapsed[step.Id] = stepStopwatch.Elapsed;
+
+            context.Progress.Report(1f);
         }
 
         var postDiagnostics = includeDiagnostics ? ReportCard.Build(current, reports) : null;
         stopwatch.Stop();
-        return new PipelineRunResult(current, preDiagnostics, postDiagnostics, reports, stopwatch.Elapsed);
+        return new PipelineRunResult(current, preDiagnostics, postDiagnostics, reports, stopwatch.Elapsed, stepElapsed);
+    }
+
+    private static Dictionary<string, double> BuildModeAdjustedParams(OperatorContext context, string operatorId)
+    {
+        return new Dictionary<string, double>
+        {
+            ["execution.mode"] = (double)context.ExecutionMode,
+            ["sampling.density.scale"] = context.ScalingPolicy.SamplingDensityScale,
+            ["voxel.size.mm"] = context.VoxelSizeMm,
+            ["smoothing.passes"] = context.ScalingPolicy.SmoothingPasses,
+            ["seed"] = context.DeterministicSeedFor(operatorId)
+        };
     }
 }

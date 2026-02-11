@@ -179,6 +179,15 @@ static async Task RunFixAsync(string[] args, OperatorRegistry registry)
             mesh = mesh with { Units = profile.Units };
         }
 
+
+        var executionMode = profile.Quality switch
+        {
+            PresetQuality.Preview => ExecutionMode.Preview,
+            PresetQuality.Final => ExecutionMode.Final,
+            _ => ExecutionMode.Standard
+        };
+        var scalingPolicy = QualityScalingPolicy.ForMode(executionMode);
+
         var ctx = new OperatorContext(
             profile.VoxelSizeMm,
             new Progress<float>(_ => { }),
@@ -196,7 +205,10 @@ static async Task RunFixAsync(string[] args, OperatorRegistry registry)
             profile.MinWallMm,
             profile.OverhangThresholdDeg,
             profile.MinimumDrainHoleMm,
-            profile.RepairMode);
+            profile.RepairMode,
+            executionMode,
+            scalingPolicy,
+            Seed: 1337);
 
         var runner = new PipelineRunner();
         var steps = ResolvePresetPipeline(profile, registry);
