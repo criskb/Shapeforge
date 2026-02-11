@@ -4,46 +4,93 @@
         Width="1200"
         Height="720"
         Title="ShapeForge">
-  <Grid ColumnDefinitions="250,*,320" RowDefinitions="*,Auto">
+  <Grid ColumnDefinitions="300,*,340" RowDefinitions="*,Auto">
     <StackPanel Grid.Column="0" Margin="12" Spacing="8">
       <TextBlock FontSize="20" FontWeight="Bold" Text="ShapeForge" />
-      <TextBlock Text="Presets" FontWeight="SemiBold" />
-      <ComboBox SelectedIndex="0">
-        <ComboBoxItem>FDM</ComboBoxItem>
-        <ComboBoxItem>SLA</ComboBoxItem>
-        <ComboBoxItem>SLS</ComboBoxItem>
-      </ComboBox>
-      <TextBlock Text="Operator Stack" FontWeight="SemiBold" Margin="0,12,0,0" />
-      <CheckBox IsChecked="True" Content="3D Print Fix" />
-      <CheckBox IsChecked="True" Content="Min Thickness" />
-      <CheckBox IsChecked="False" Content="Hollow + Drain" />
+
+      <TextBlock Text="Last-used profile" FontWeight="SemiBold" />
+      <ComboBox ItemsSource="{Binding PresetOptions}" SelectedItem="{Binding SelectedPreset}" />
+
+      <TextBlock Text="Last-used recipe" FontWeight="SemiBold" Margin="0,8,0,0" />
+      <ComboBox ItemsSource="{Binding RecipeOptions}" SelectedItem="{Binding SelectedRecipe}" />
+
+      <TextBlock Text="Last-used units" FontWeight="SemiBold" Margin="0,8,0,0" />
+      <ComboBox ItemsSource="{Binding UnitOptions}" SelectedItem="{Binding SelectedUnits}" />
+
+      <Separator Margin="0,10,0,4" />
+      <TextBlock Text="Explicit command flow" FontWeight="SemiBold" />
+      <ItemsControl ItemsSource="{Binding FlowSteps}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <TextBlock Text="{Binding ., StringFormat=• {0}}" />
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <Button Margin="0,10,0,0" Content="1) Load" Command="{Binding LoadCommand}" />
+      <Button Content="2) Diagnose" Command="{Binding DiagnoseCommand}" />
+      <Button Content="3) Build stack" Command="{Binding BuildStackCommand}" />
+      <Button Content="4) Run" Command="{Binding RunCommand}" />
+      <Button Content="5) Compare" Command="{Binding CompareCommand}" />
+      <Button Content="6) Export STL" Command="{Binding ExportCommand}" />
     </StackPanel>
 
-    <Border Grid.Column="1" Margin="12" Background="#101820" CornerRadius="8">
-      <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="White" Text="3D Viewport (MVP placeholder)" />
+    <Border Grid.Column="1" Margin="12" Background="#101820" CornerRadius="8" Padding="12">
+      <StackPanel Spacing="8">
+        <TextBlock Foreground="White" FontSize="16" FontWeight="SemiBold" Text="Pipeline" />
+        <TextBlock Foreground="White" Text="{Binding PipelineRun.Elapsed, StringFormat=Elapsed: {0}}" />
+        <TextBlock Foreground="White" Text="{Binding PipelineRun.ComparisonSummary}" TextWrapping="Wrap" />
+
+        <TextBlock Foreground="White" FontWeight="SemiBold" Text="Operator Stack" Margin="0,10,0,0" />
+        <TextBlock Foreground="White" Text="{Binding OperatorStack.Summary}" />
+        <ItemsControl ItemsSource="{Binding OperatorStack.Operators}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Border Margin="0,2" Padding="6" Background="#1D2E3D" CornerRadius="4">
+                <StackPanel>
+                  <TextBlock Foreground="White" Text="{Binding DisplayName}" FontWeight="SemiBold" />
+                  <TextBlock Foreground="#C0D4E3" Text="{Binding Id}" />
+                  <TextBlock Foreground="#7FA9C6" Text="{Binding Category}" />
+                </StackPanel>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
     </Border>
 
     <StackPanel Grid.Column="2" Margin="12" Spacing="8">
       <TextBlock Text="Diagnostics" FontSize="16" FontWeight="SemiBold" />
-      <TextBlock Text="Triangles: -" />
-      <TextBlock Text="Volume delta: -" />
-      <TextBlock Text="Min thickness: -" />
-      <TextBlock Text="Trapped volumes: -" />
+      <TextBlock Text="{Binding DiagnosticsPanel.TriangleCount, StringFormat=Triangles: {0}}" />
+      <TextBlock Text="{Binding DiagnosticsPanel.VolumeDelta, StringFormat=Volume metric: {0}}" />
+      <TextBlock Text="{Binding DiagnosticsPanel.MinThickness, StringFormat=Min thickness metric: {0}}" />
+      <TextBlock Text="{Binding DiagnosticsPanel.TrappedVolumes, StringFormat=Trapped volumes: {0}}" />
+
+      <ItemsControl ItemsSource="{Binding DiagnosticsPanel.Issues}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <TextBlock Text="{Binding Display, StringFormat=• {0}}" TextWrapping="Wrap" />
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
 
       <Separator Margin="0,6,0,6" />
       <TextBlock Text="Readiness Summary" FontSize="16" FontWeight="SemiBold" />
-      <TextBlock Text="🟡 Status: NeedsAttention" />
+      <TextBlock Text="{Binding ReadinessSummary.Status, StringFormat=Status: {0}}" />
+      <TextBlock Text="{Binding ReadinessSummary.Grade, StringFormat=Grade: {0}}" />
+      <TextBlock Text="{Binding ReadinessSummary.Confidence}" TextWrapping="Wrap" Foreground="#6A6A6A" />
       <TextBlock Text="Top blockers:" FontWeight="SemiBold" />
-      <TextBlock Text="• mesh.not-watertight — Small hole fill recommended" TextWrapping="Wrap" />
-      <TextBlock Text="• readiness.wall-below-profile-min — Increase local wall thickness" TextWrapping="Wrap" />
-      <TextBlock Text="• readiness.high-overhang-ratio — Rotate part / add supports" TextWrapping="Wrap" />
-      <TextBlock Text="Confidence: 82% based on mesh metrics and operator reports" TextWrapping="Wrap" Foreground="#6A6A6A" />
-
-      <Button Margin="0,16,0,0" Content="Export STL" />
+      <ItemsControl ItemsSource="{Binding ReadinessSummary.TopBlockers}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <TextBlock Text="{Binding Display, StringFormat=• {0}}" TextWrapping="Wrap" />
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
     </StackPanel>
 
     <Border Grid.Row="1" Grid.ColumnSpan="3" Background="#202020" Padding="8">
-      <TextBlock Foreground="White" Text="Ready" />
+      <TextBlock Foreground="White" Text="{Binding StatusMessage}" />
     </Border>
   </Grid>
 </Window>
