@@ -1,0 +1,18 @@
+{
+  "fixtureId": "cube_hole",
+  "meshFile": "cube_hole.stl",
+  "baselineDiagnostics": {
+    "hasWarningsOrErrors": true,
+    "requiredIssues": [
+      { "code": "mesh.not-watertight", "severity": "Error" },
+      { "code": "mesh.low-triangle-count", "severity": "Warning", "count": 10 }
+    ]
+  },
+  "postFix": {
+    "trianglesBefore": 10,
+    "trianglesAfter": 12,
+    "metrics": {
+      "triangles.added.hole-closure": 2
+    }
+  }
+}

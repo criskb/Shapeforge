@@ -10,42 +10,44 @@ namespace ShapeForge.Tests;
 public class FixtureBasedRepairAndDiagnoseTests
 {
     private static readonly string RepoRoot = FindRepoRoot();
-    private static readonly string FixturesDir = Path.Combine(RepoRoot, "tests", "ShapeForge.Tests", "Fixtures");
 
     [Fact]
     public async Task Diagnostics_IssueCountsAndSeverity_AreDeterministicForFixtures()
     {
         var io = new StlMeshIO();
-        var cube = await io.LoadStlAsync(Path.Combine(FixturesDir, "cube_ok.stl"));
-        var nonmanifold = await io.LoadStlAsync(Path.Combine(FixturesDir, "nonmanifold_edge.stl"));
+        var cubeFixture = FixtureRegistry.Load("cube_ok");
+        var nonmanifoldFixture = FixtureRegistry.Load("nonmanifold_edge");
+
+        var cube = await io.LoadStlAsync(cubeFixture.MeshPath);
+        var nonmanifold = await io.LoadStlAsync(nonmanifoldFixture.MeshPath);
 
         var cubeDiagnosticsA = ReportCard.Build(cube);
         var cubeDiagnosticsB = ReportCard.Build(cube);
         var nonmanifoldDiagnostics = ReportCard.Build(nonmanifold);
 
         Assert.Equal(cubeDiagnosticsA.Issues, cubeDiagnosticsB.Issues);
-        Assert.True(cubeDiagnosticsA.HasWarningsOrErrors);
-        Assert.Contains(cubeDiagnosticsA.Issues, i => i.Code == "mesh.low-triangle-count" && i.Severity == IssueSeverity.Warning);
-        Assert.Contains(cubeDiagnosticsA.Issues, i => i.Code == "mesh.normals.missing" && i.Severity == IssueSeverity.Info);
+        Assert.Equal(cubeFixture.BaselineHasWarningsOrErrors, cubeDiagnosticsA.HasWarningsOrErrors);
+        AssertExpectedIssues(cubeDiagnosticsA, cubeFixture.RequiredIssues);
 
-        Assert.True(nonmanifoldDiagnostics.HasWarningsOrErrors);
-        Assert.Contains(nonmanifoldDiagnostics.Issues, i => i.Code == "mesh.low-triangle-count" && i.Count == 4);
-        Assert.Contains(nonmanifoldDiagnostics.Issues, i => i.Code == "mesh.not-watertight" && i.Severity == IssueSeverity.Error);
+        Assert.Equal(nonmanifoldFixture.BaselineHasWarningsOrErrors, nonmanifoldDiagnostics.HasWarningsOrErrors);
+        AssertExpectedIssues(nonmanifoldDiagnostics, nonmanifoldFixture.RequiredIssues);
     }
 
     [Fact]
     public async Task RepairFixOperator_FillsSmallHole_WhenRepairModeIsAggressive()
     {
         var io = new StlMeshIO();
-        var meshWithHole = await io.LoadStlAsync(Path.Combine(FixturesDir, "cube_hole.stl"));
+        var fixture = FixtureRegistry.Load("cube_hole");
+        var meshWithHole = await io.LoadStlAsync(fixture.MeshPath);
         var op = new RepairFixOperator();
         var ctx = BuildContext(RepairMode.Aggressive);
 
         var (repaired, report) = await op.RunAsync(meshWithHole, ctx, CancellationToken.None);
 
-        Assert.Equal(10, meshWithHole.Indices.Length / 3);
-        Assert.Equal(12, repaired.Indices.Length / 3);
-        Assert.Equal(2, report.Metrics["triangles.added.hole-closure"]);
+        Assert.NotNull(fixture.PostFix);
+        Assert.Equal(fixture.PostFix!.TrianglesBefore, meshWithHole.Indices.Length / 3);
+        Assert.Equal(fixture.PostFix.TrianglesAfter, repaired.Indices.Length / 3);
+        AssertExpectedMetrics(report.Metrics, fixture.PostFix.Metrics);
     }
 
     [Fact]
@@ -86,17 +88,18 @@ public class FixtureBasedRepairAndDiagnoseTests
     public async Task RepairFixOperator_RemovesTinyDetachedShells_BasedOnThreshold()
     {
         var io = new StlMeshIO();
-        var input = await io.LoadStlAsync(Path.Combine(FixturesDir, "tiny_shells.stl"));
+        var fixture = FixtureRegistry.Load("tiny_shells");
+        var input = await io.LoadStlAsync(fixture.MeshPath);
 
         var op = new RepairFixOperator(closeRadiusMm: 0.6f);
         var ctx = BuildContext(RepairMode.Balanced);
 
         var (repaired, report) = await op.RunAsync(input, ctx, CancellationToken.None);
 
-        Assert.Equal(24, input.Indices.Length / 3);
-        Assert.Equal(12, repaired.Indices.Length / 3);
-        Assert.Equal(12, report.Metrics["triangles.removed.tiny-shells"]);
-        Assert.Equal(0, report.Metrics["triangles.added.hole-closure"]);
+        Assert.NotNull(fixture.PostFix);
+        Assert.Equal(fixture.PostFix!.TrianglesBefore, input.Indices.Length / 3);
+        Assert.Equal(fixture.PostFix.TrianglesAfter, repaired.Indices.Length / 3);
+        AssertExpectedMetrics(report.Metrics, fixture.PostFix.Metrics);
     }
 
     [Fact]
@@ -108,7 +111,8 @@ public class FixtureBasedRepairAndDiagnoseTests
 
         try
         {
-            var warningExit = await RunCliAsync($"diagnose --in \"{Path.Combine(FixturesDir, "cube_ok.stl")}\"");
+            var warningFixture = FixtureRegistry.Load("cube_ok");
+            var warningExit = await RunCliAsync($"diagnose --in \"{warningFixture.MeshPath}\"");
             var okExit = await RunCliAsync($"diagnose --in \"{healthyFile}\"");
             var usageExit = await RunCliAsync("diagnose");
 
@@ -122,6 +126,26 @@ public class FixtureBasedRepairAndDiagnoseTests
             {
                 File.Delete(healthyFile);
             }
+        }
+    }
+
+
+    private static void AssertExpectedIssues(MeshDiagnostics diagnostics, IReadOnlyList<ExpectedIssue> expectedIssues)
+    {
+        foreach (var expected in expectedIssues)
+        {
+            Assert.Contains(diagnostics.Issues, issue =>
+                issue.Code == expected.Code
+                && (!expected.Severity.HasValue || issue.Severity == expected.Severity.Value)
+                && (!expected.Count.HasValue || issue.Count == expected.Count.Value));
+        }
+    }
+
+    private static void AssertExpectedMetrics(IReadOnlyDictionary<string, int> metrics, IReadOnlyDictionary<string, int> expected)
+    {
+        foreach (var (metric, value) in expected)
+        {
+            Assert.Equal(value, metrics[metric]);
         }
     }
 
