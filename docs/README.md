@@ -1,28 +1,18 @@
-# ShapeForge
+# ShapeForge Docs (Native macOS Track)
 
-ShapeForge is a .NET 8 desktop + CLI toolkit for improving 3D-printable meshes.
+ShapeForge is now on a **native Swift/Xcode-only** development path.
 
-## Current status
+## Start here
 
-This repository is bootstrapped with:
+- Rewrite strategy and phased execution: `docs/SWIFT_REWRITE_PLAN.md`
+- Local development workflow: `docs/DEV.md`
+- macOS + Xcode build/run guide: `docs/MACOS_XCODE.md`
 
-- `ShapeForge.Core`: mesh models, STL IO, pipeline contracts, and initial operators.
-- `ShapeForge.Cli`: commands for version, operator listing, and `fix` on STL files.
-- `ShapeForge.App`: Avalonia shell UI for presets, operator stack, and diagnostics.
-- `ShapeForge.Tests`: baseline unit/integration tests for STL IO and repair operator contract.
+## Repository layout
 
-## CLI quick start
+- `native/Package.swift` — Swift package manifest
+- `native/Sources/ShapeForgeCore` — shared geometry/pipeline core contracts
+- `native/Sources/ShapeForgeCLI` — native command line app
+- `native/Tests/ShapeForgeCoreTests` — baseline deterministic tests
 
-```bash
-shapeforge operators
-shapeforge fix --in input.stl --out improved.stl --preset Fdm
-```
-
-## macOS + Xcode
-
-For macOS build/run instructions using Xcode tooling, see `docs/MACOS_XCODE.md`.
-The default macOS workflow now builds a universal app bundle supporting both Apple Silicon and Intel Macs via per-architecture payloads in one `.app`.
-To build the full distributable app, run `./scripts/macos/build-full-app.sh`.
-## Roadmap
-
-See `docs/ROADMAP.md` for planned epics, fixture-driven validation scope, and release milestone gates.
+Legacy .NET/Avalonia projects and scripts were removed as part of the native cutover.
