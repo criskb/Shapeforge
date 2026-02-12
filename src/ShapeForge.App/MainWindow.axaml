@@ -17,6 +17,12 @@
       <TextBlock Text="Last-used units" FontWeight="SemiBold" Margin="0,8,0,0" />
       <ComboBox ItemsSource="{Binding UnitOptions}" SelectedItem="{Binding SelectedUnits}" />
 
+      <TextBlock Text="Input STL path" FontWeight="SemiBold" Margin="0,8,0,0" />
+      <TextBox Text="{Binding InputMeshPath}" Watermark="/path/to/input.stl" />
+
+      <TextBlock Text="Export STL path (optional)" FontWeight="SemiBold" Margin="0,8,0,0" />
+      <TextBox Text="{Binding ExportMeshPath}" Watermark="/path/to/output.stl" />
+
       <Separator Margin="0,10,0,4" />
       <TextBlock Text="Explicit command flow" FontWeight="SemiBold" />
       <ItemsControl ItemsSource="{Binding FlowSteps}">
