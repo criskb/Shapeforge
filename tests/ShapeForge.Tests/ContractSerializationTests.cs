@@ -57,6 +57,54 @@ public class ContractSerializationTests
         Assert.Equal(12, roundTrip!.CountMetrics["triangles.count"]);
         Assert.True(roundTrip.BooleanFlags["mesh.has-warnings-or-errors"]);
     }
+    [Fact]
+    public void MeshDiagnostics_FromLegacyV1Json_NormalizesToCurrentSchema()
+    {
+        const string v1Json = """
+        {
+          "diagnosticsVersion": "1.0",
+          "topology": { "triangles.count": 12 },
+          "quality": { "normals.missing": 0 },
+          "printability": { "thin.vertices.after": 2 },
+          "issues": [
+            {
+              "severity": "warning",
+              "code": "thin-wall",
+              "message": "Thin wall detected",
+              "count": 2
+            }
+          ],
+          "counts": { "triangles.count": 12 },
+          "booleans": { "mesh.has-warnings-or-errors": true }
+        }
+        """;
+
+        var normalized = MeshDiagnostics.FromJson(v1Json);
+        var canonical = normalized.ToJson();
+
+        Assert.Equal(MeshDiagnostics.CurrentSchemaVersion, normalized.SchemaVersion);
+        Assert.Contains("\"schemaVersion\": \"1.0\"", canonical);
+        Assert.DoesNotContain("diagnosticsVersion", canonical, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(12, normalized.CountMetrics["triangles.count"]);
+    }
+
+    [Fact]
+    public void MeshDiagnostics_FromUnsupportedMajorVersion_Throws()
+    {
+        const string invalidJson = """
+        {
+          "schemaVersion": "2.0",
+          "topology": {},
+          "quality": {},
+          "printability": {},
+          "issues": []
+        }
+        """;
+
+        var ex = Assert.Throws<InvalidOperationException>(() => MeshDiagnostics.FromJson(invalidJson));
+        Assert.Contains("Unsupported diagnostics schema version", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
 
     [Fact]
     public void OperatorAndPipelineContracts_SerializeAsStableV1Shape()

@@ -10,4 +10,7 @@ public record PipelineRunResult(
     MeshDiagnostics? PostDiagnostics,
     IReadOnlyList<OpReport> StepReports,
     TimeSpan Elapsed,
-    IReadOnlyDictionary<string, TimeSpan>? StepElapsed = null);
+    IReadOnlyDictionary<string, TimeSpan>? StepElapsed = null)
+{
+    public const string CurrentSchemaVersion = "1.0";
+}

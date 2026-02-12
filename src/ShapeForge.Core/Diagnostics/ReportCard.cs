@@ -5,7 +5,7 @@ namespace ShapeForge.Core.Diagnostics;
 
 public static class ReportCard
 {
-    public const string SchemaVersion = "1.0";
+    public const string SchemaVersion = MeshDiagnostics.CurrentSchemaVersion;
 
     public static MeshDiagnostics Build(MeshModel mesh, IEnumerable<OpReport>? reports = null)
     {

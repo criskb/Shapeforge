@@ -13,3 +13,9 @@ public record DiagnosticIssue(
     string Message,
     int Count = 1,
     Dictionary<string, string>? Details = null);
+
+
+public static class DiagnosticIssueContract
+{
+    public const string SchemaVersion = "1.0";
+}

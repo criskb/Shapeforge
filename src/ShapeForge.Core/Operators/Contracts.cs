@@ -37,8 +37,11 @@ public record OperatorSchema(
     IReadOnlyList<ProcessMode>? SupportedModes = null,
     IReadOnlyList<PresetQuality>? SupportedQualities = null)
 {
+    public const string CurrentSchemaVersion = "1.0";
+    public const string DefaultCategory = "analysis.generic";
+
     public static OperatorSchema Empty(string id, string displayName)
-        => new(id, displayName, "1.0", string.Empty, Array.Empty<OperatorParameterSchema>());
+        => new(id, displayName, CurrentSchemaVersion, string.Empty, Array.Empty<OperatorParameterSchema>(), DefaultCategory);
 }
 
 [Flags]
