@@ -66,6 +66,8 @@ public static class ReportCard
         var duplicateCount = 0;
         var invalidIndexCount = 0;
         var edgeUseCounts = new Dictionary<(int a, int b), int>();
+        var trianglesByVertex = new Dictionary<int, List<int>>();
+        var validTriangles = new List<(int A, int B, int C)>();
 
         var faces = new HashSet<(int a, int b, int c)>();
         for (var i = 0; i + 2 < mesh.Indices.Length; i += 3)
@@ -95,10 +97,19 @@ public static class ReportCard
             CountEdge(edgeUseCounts, ia, ib);
             CountEdge(edgeUseCounts, ib, ic);
             CountEdge(edgeUseCounts, ic, ia);
+
+            var triIndex = validTriangles.Count;
+            validTriangles.Add((ia, ib, ic));
+            AddTriangleReference(trianglesByVertex, ia, triIndex);
+            AddTriangleReference(trianglesByVertex, ib, triIndex);
+            AddTriangleReference(trianglesByVertex, ic, triIndex);
         }
 
         var boundaryEdges = edgeUseCounts.Count(e => e.Value == 1);
         var nonManifoldEdges = edgeUseCounts.Count(e => e.Value > 2);
+        var shellCount = CountShells(validTriangles, trianglesByVertex);
+        var eulerCharacteristic = (double)vertexCount - edgeUseCounts.Count + validTriangles.Count;
+        var (surfaceArea, signedVolume) = ComputeGeometricStats(mesh, validTriangles);
         var isWatertight = triangleCount > 0 && boundaryEdges == 0 && invalidIndexCount == 0;
         var isManifold = triangleCount > 0 && nonManifoldEdges == 0 && invalidIndexCount == 0;
 
@@ -111,6 +122,11 @@ public static class ReportCard
             ["triangles.duplicate.count"] = duplicateCount,
             ["edges.boundary.count"] = boundaryEdges,
             ["edges.nonmanifold.count"] = nonManifoldEdges,
+            ["mesh.shells.count"] = shellCount,
+            ["mesh.euler.characteristic"] = eulerCharacteristic,
+            ["mesh.surface.area"] = surfaceArea,
+            ["mesh.volume.signed"] = signedVolume,
+            ["mesh.volume.abs"] = Math.Abs(signedVolume),
             ["mesh.is-watertight"] = isWatertight ? 1 : 0,
             ["mesh.is-manifold"] = isManifold ? 1 : 0,
             ["bounds.min.x"] = minX,
@@ -122,7 +138,8 @@ public static class ReportCard
             ["bounds.size.x"] = maxX - minX,
             ["bounds.size.y"] = maxY - minY,
             ["bounds.size.z"] = maxZ - minZ,
-            ["bounds.volume"] = (maxX - minX) * (maxY - minY) * (maxZ - minZ)
+            ["bounds.volume"] = (maxX - minX) * (maxY - minY) * (maxZ - minZ),
+            ["bounds.diagonal"] = Distance((minX, minY, minZ), (maxX, maxY, maxZ))
         };
     }
 
@@ -267,6 +284,11 @@ public static class ReportCard
             issues.Add(new DiagnosticIssue(IssueSeverity.Error, "mesh.non-manifold", "Mesh contains non-manifold edges.", Math.Max(1, (int)Math.Round(nonManifoldEdges))));
         }
 
+        if (topology.TryGetValue("mesh.shells.count", out var shellCount) && shellCount > 1)
+        {
+            issues.Add(new DiagnosticIssue(IssueSeverity.Warning, "mesh.shells.multiple", "Mesh contains multiple disconnected shells.", (int)Math.Round(shellCount)));
+        }
+
         if (mesh.Normals is null || mesh.Normals.Length == 0)
         {
             issues.Add(new DiagnosticIssue(IssueSeverity.Info, "mesh.normals.missing", "Mesh normals are missing and may be regenerated."));
@@ -330,6 +352,95 @@ public static class ReportCard
         edgeUseCounts[edge] = count + 1;
     }
 
+    private static int CountShells(List<(int A, int B, int C)> triangles, Dictionary<int, List<int>> trianglesByVertex)
+    {
+        if (triangles.Count == 0)
+        {
+            return 0;
+        }
+
+        var visited = new bool[triangles.Count];
+        var shells = 0;
+
+        for (var i = 0; i < triangles.Count; i++)
+        {
+            if (visited[i])
+            {
+                continue;
+            }
+
+            shells++;
+            var queue = new Queue<int>();
+            visited[i] = true;
+            queue.Enqueue(i);
+
+            while (queue.Count > 0)
+            {
+                var current = queue.Dequeue();
+                var tri = triangles[current];
+
+                VisitConnectedTriangles(trianglesByVertex, tri.A, visited, queue);
+                VisitConnectedTriangles(trianglesByVertex, tri.B, visited, queue);
+                VisitConnectedTriangles(trianglesByVertex, tri.C, visited, queue);
+            }
+        }
+
+        return shells;
+    }
+
+    private static void VisitConnectedTriangles(Dictionary<int, List<int>> trianglesByVertex, int vertex, bool[] visited, Queue<int> queue)
+    {
+        if (!trianglesByVertex.TryGetValue(vertex, out var neighbors))
+        {
+            return;
+        }
+
+        foreach (var next in neighbors)
+        {
+            if (visited[next])
+            {
+                continue;
+            }
+
+            visited[next] = true;
+            queue.Enqueue(next);
+        }
+    }
+
+    private static void AddTriangleReference(Dictionary<int, List<int>> map, int vertex, int triIndex)
+    {
+        if (!map.TryGetValue(vertex, out var list))
+        {
+            list = [];
+            map[vertex] = list;
+        }
+
+        list.Add(triIndex);
+    }
+
+
+    private static (double surfaceArea, double signedVolume) ComputeGeometricStats(MeshModel mesh, List<(int A, int B, int C)> triangles)
+    {
+        var surfaceArea = 0.0;
+        var signedVolume = 0.0;
+
+        foreach (var tri in triangles)
+        {
+            var aIdx = tri.A * 3;
+            var bIdx = tri.B * 3;
+            var cIdx = tri.C * 3;
+
+            var a = (x: mesh.Vertices[aIdx], y: mesh.Vertices[aIdx + 1], z: mesh.Vertices[aIdx + 2]);
+            var b = (x: mesh.Vertices[bIdx], y: mesh.Vertices[bIdx + 1], z: mesh.Vertices[bIdx + 2]);
+            var c = (x: mesh.Vertices[cIdx], y: mesh.Vertices[cIdx + 1], z: mesh.Vertices[cIdx + 2]);
+
+            surfaceArea += TriangleArea(a, b, c);
+            signedVolume += SignedTetraVolume(a, b, c);
+        }
+
+        return (surfaceArea, signedVolume);
+    }
+
     private static double Distance((float x, float y, float z) a, (float x, float y, float z) b)
     {
         var dx = a.x - b.x;
@@ -337,6 +448,11 @@ public static class ReportCard
         var dz = a.z - b.z;
         return Math.Sqrt((dx * dx) + (dy * dy) + (dz * dz));
     }
+
+    private static double SignedTetraVolume((float x, float y, float z) a, (float x, float y, float z) b, (float x, float y, float z) c)
+        => ((a.x * ((b.y * c.z) - (b.z * c.y))) -
+            (a.y * ((b.x * c.z) - (b.z * c.x))) +
+            (a.z * ((b.x * c.y) - (b.y * c.x)))) / 6.0;
 
     private static double TriangleArea((float x, float y, float z) a, (float x, float y, float z) b, (float x, float y, float z) c)
     {

@@ -10,6 +10,9 @@ public interface IReadinessProfile
 {
     float MinWallMm { get; }
     float OverhangThresholdDeg { get; }
+    float MinimumDrainHoleMm { get; }
+    string Mode { get; }
+    string Quality { get; }
 }
 
 public sealed class ThresholdRule : IReadinessRule
