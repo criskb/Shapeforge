@@ -195,6 +195,13 @@ public sealed class MainWindowViewModel : ObservableObject
         }
 
         var profile = ResolveProfile();
+        var executionMode = profile.Quality switch
+        {
+            PresetQuality.Preview => ExecutionMode.Preview,
+            PresetQuality.Final => ExecutionMode.Final,
+            _ => ExecutionMode.Standard
+        };
+
         var context = new OperatorContext(
             profile.VoxelSizeMm,
             new Progress<float>(_ => { }),
@@ -208,8 +215,8 @@ public sealed class MainWindowViewModel : ObservableObject
             profile.OverhangThresholdDeg,
             profile.MinimumDrainHoleMm,
             profile.RepairMode,
-            ExecutionMode.HighQuality,
-            QualityScalingPolicy.For(ExecutionMode.HighQuality),
+            executionMode,
+            QualityScalingPolicy.ForMode(executionMode),
             Seed: 1337);
 
         _runResult = _pipelineRunner.RunDetailedAsync(_loadedMesh, _operatorStack, context, CancellationToken.None).GetAwaiter().GetResult();
