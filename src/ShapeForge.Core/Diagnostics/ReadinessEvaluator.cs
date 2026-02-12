@@ -84,6 +84,7 @@ public sealed class ReadinessEvaluator
             "mesh.low-triangle-count" => "Increase tessellation or export at higher resolution.",
             "mesh.non-manifold" => "Run repair.fix in aggressive mode to resolve non-manifold edges.",
             "mesh.not-watertight" => "Small hole fill recommended before hollowing and slicing.",
+            "mesh.shells.multiple" => "Merge intended parts or remove detached debris shells before slicing.",
             "printability.thin-vertices" => "Use thickness.enforce or increase wall design thickness.",
             _ when issue.Code.StartsWith("operator.repair.fix", StringComparison.OrdinalIgnoreCase)
                 => "Review repair.fix warnings and re-run with a stronger repair mode.",
@@ -139,6 +140,26 @@ public sealed class ReadinessEvaluator
                 message: "Overhang area ratio exceeds the profile tolerance.",
                 priority: 80,
                 hint: "Rotate part orientation or add supports for overhang-heavy regions."),
+            new ThresholdRule(
+                name: "shell-count",
+                metricKey: "mesh.shells.count",
+                threshold: _ => 1,
+                isFailure: static (shellCount, expected) => shellCount > expected,
+                issueCode: "mesh.shells.multiple",
+                severity: IssueSeverity.Warning,
+                message: "Mesh contains multiple disconnected shells.",
+                priority: 85,
+                hint: "Merge intended parts or remove detached debris shells before slicing."),
+            new ThresholdRule(
+                name: "resin-drain-hole",
+                metricKey: "bounds.diagonal",
+                threshold: p => p.Mode.Equals("Resin", StringComparison.OrdinalIgnoreCase) ? p.MinimumDrainHoleMm * 6.0 : 0.0,
+                isFailure: static (diag, threshold) => threshold > 0 && diag > threshold,
+                issueCode: "readiness.resin.drain-hole-review",
+                severity: IssueSeverity.Info,
+                message: "Resin profile selected; verify drain holes for larger enclosed models.",
+                priority: 45,
+                hint: "Ensure trapped cavities include drainage/venting that meets your printer workflow."),
             new TopologyRule(
                 name: "topology-watertight",
                 boolMetricKey: "mesh.is-watertight",
@@ -164,5 +185,8 @@ public sealed class ReadinessEvaluator
     {
         public float MinWallMm => Source.MinWallMm;
         public float OverhangThresholdDeg => Source.OverhangThresholdDeg;
+        public float MinimumDrainHoleMm => Source.MinimumDrainHoleMm;
+        public string Mode => Source.Mode.ToString();
+        public string Quality => Source.Quality.ToString();
     }
 }

@@ -7,6 +7,13 @@ using System.Text.Json.Serialization;
 
 
 string FixUsage() => "Usage: shapeforge fix --in input.stl --out output.stl [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive] [--manifest out.json]";
+string DiagnoseUsage() => "Usage: shapeforge diagnose --in input.stl [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive] [--json [report.json]]";
+
+const int ExitCodeSuccess = 0;
+const int ExitCodeRuntimeFailure = 1;
+const int ExitCodeInvalidArguments = 2;
+const int ExitCodeReadinessAttention = 3;
+const int ExitCodeReadinessBlocked = 4;
 
 JsonSerializerOptions BuildJsonOptions() => new()
 {
@@ -50,7 +57,7 @@ switch (args[0])
     default:
         Console.Error.WriteLine($"Unknown command: {args[0]}");
         PrintHelp();
-        Environment.ExitCode = 2;
+        Environment.ExitCode = ExitCodeInvalidArguments;
         break;
 }
 
@@ -74,7 +81,7 @@ static async Task RunFixAsync(string[] args, OperatorRegistry registry)
                 {
                     Console.Error.WriteLine("Missing value for --in.");
                     Console.Error.WriteLine(FixUsage());
-                    Environment.ExitCode = 2;
+                    Environment.ExitCode = ExitCodeInvalidArguments;
                     return;
                 }
 
@@ -84,7 +91,7 @@ static async Task RunFixAsync(string[] args, OperatorRegistry registry)
                 {
                     Console.Error.WriteLine("Missing value for --out.");
                     Console.Error.WriteLine(FixUsage());
-                    Environment.ExitCode = 2;
+                    Environment.ExitCode = ExitCodeInvalidArguments;
                     return;
                 }
 
@@ -94,14 +101,14 @@ static async Task RunFixAsync(string[] args, OperatorRegistry registry)
                 {
                     Console.Error.WriteLine("Missing value for --preset.");
                     Console.Error.WriteLine(FixUsage());
-                    Environment.ExitCode = 2;
+                    Environment.ExitCode = ExitCodeInvalidArguments;
                     return;
                 }
 
                 if (!Presets.TryParsePreset(presetRaw, out preset))
                 {
                     Console.Error.WriteLine($"Unsupported preset '{presetRaw}'. Use Fdm, Sla/Resin, or Sls.");
-                    Environment.ExitCode = 2;
+                    Environment.ExitCode = ExitCodeInvalidArguments;
                     return;
                 }
 
@@ -111,14 +118,14 @@ static async Task RunFixAsync(string[] args, OperatorRegistry registry)
                 {
                     Console.Error.WriteLine("Missing value for --mode.");
                     Console.Error.WriteLine(FixUsage());
-                    Environment.ExitCode = 2;
+                    Environment.ExitCode = ExitCodeInvalidArguments;
                     return;
                 }
 
                 if (!Presets.TryParseMode(modeRaw, out var parsedMode))
                 {
                     Console.Error.WriteLine($"Unsupported mode '{modeRaw}'. Use Fdm, Resin, or Sls.");
-                    Environment.ExitCode = 2;
+                    Environment.ExitCode = ExitCodeInvalidArguments;
                     return;
                 }
 
@@ -129,14 +136,14 @@ static async Task RunFixAsync(string[] args, OperatorRegistry registry)
                 {
                     Console.Error.WriteLine("Missing value for --quality.");
                     Console.Error.WriteLine(FixUsage());
-                    Environment.ExitCode = 2;
+                    Environment.ExitCode = ExitCodeInvalidArguments;
                     return;
                 }
 
                 if (!Presets.TryParseQuality(qualityRaw, out var parsedQuality))
                 {
                     Console.Error.WriteLine($"Unsupported quality '{qualityRaw}'. Use Preview or Final.");
-                    Environment.ExitCode = 2;
+                    Environment.ExitCode = ExitCodeInvalidArguments;
                     return;
                 }
 
@@ -147,7 +154,7 @@ static async Task RunFixAsync(string[] args, OperatorRegistry registry)
                 {
                     Console.Error.WriteLine("Missing value for --units.");
                     Console.Error.WriteLine(FixUsage());
-                    Environment.ExitCode = 2;
+                    Environment.ExitCode = ExitCodeInvalidArguments;
                     return;
                 }
 
@@ -157,14 +164,14 @@ static async Task RunFixAsync(string[] args, OperatorRegistry registry)
                 {
                     Console.Error.WriteLine("Missing value for --repair-mode.");
                     Console.Error.WriteLine(FixUsage());
-                    Environment.ExitCode = 2;
+                    Environment.ExitCode = ExitCodeInvalidArguments;
                     return;
                 }
 
                 if (!Presets.TryParseRepairMode(repairModeRaw, out var parsedRepairMode))
                 {
                     Console.Error.WriteLine($"Unsupported repair mode '{repairModeRaw}'. Use Conservative, Balanced, or Aggressive.");
-                    Environment.ExitCode = 2;
+                    Environment.ExitCode = ExitCodeInvalidArguments;
                     return;
                 }
 
@@ -175,7 +182,7 @@ static async Task RunFixAsync(string[] args, OperatorRegistry registry)
                 {
                     Console.Error.WriteLine("Missing value for --manifest.");
                     Console.Error.WriteLine(FixUsage());
-                    Environment.ExitCode = 2;
+                    Environment.ExitCode = ExitCodeInvalidArguments;
                     return;
                 }
 
@@ -183,7 +190,7 @@ static async Task RunFixAsync(string[] args, OperatorRegistry registry)
             default:
                 Console.Error.WriteLine($"Unknown option for fix command: {args[i]}");
                 Console.Error.WriteLine(FixUsage());
-                Environment.ExitCode = 2;
+                Environment.ExitCode = ExitCodeInvalidArguments;
                 return;
         }
     }
@@ -191,7 +198,7 @@ static async Task RunFixAsync(string[] args, OperatorRegistry registry)
     if (string.IsNullOrWhiteSpace(input) || string.IsNullOrWhiteSpace(output))
     {
         Console.Error.WriteLine(FixUsage());
-        Environment.ExitCode = 2;
+        Environment.ExitCode = ExitCodeInvalidArguments;
         return;
     }
 
@@ -257,29 +264,9 @@ static async Task RunFixAsync(string[] args, OperatorRegistry registry)
         PrintDiagnosticsSummary("Post-fix diagnostics", postDiagnostics);
         PrintReadinessSummary("Post-fix readiness summary", postReadiness);
 
-        foreach (var report in run.StepReports)
-        {
-            Console.WriteLine($"[{report.Name}]");
-            foreach (var metric in report.Metrics)
-            {
-                Console.WriteLine($"{metric.Key}: {metric.Value}");
-            }
-
-            foreach (var warning in report.Warnings)
-            {
-                Console.WriteLine($"WARNING: {warning}");
-            }
-
-            foreach (var note in report.Notes)
-            {
-                Console.WriteLine($"note: {note}");
-            }
-        }
-
-        foreach (var issue in postDiagnostics.Issues.Where(i => i.Severity >= IssueSeverity.Warning))
-        {
-            Console.WriteLine($"WARNING: {issue.Code} - {issue.Message}");
-        }
+        PrintFixDeltaSummary(preDiagnostics, postDiagnostics);
+        PrintOperatorReports(run.StepReports);
+        PrintWarningsSummary(postDiagnostics, run.StepReports);
 
         if (!string.IsNullOrWhiteSpace(manifestOutput))
         {
@@ -300,7 +287,7 @@ static async Task RunFixAsync(string[] args, OperatorRegistry registry)
     catch (Exception ex)
     {
         Console.Error.WriteLine($"Fix failed: {ex.Message}");
-        Environment.ExitCode = 1;
+        Environment.ExitCode = ExitCodeRuntimeFailure;
     }
 }
 
@@ -339,8 +326,8 @@ static async Task RunDiagnoseAsync(string[] args, OperatorRegistry registry)
                 if (!TryReadArgumentValue(args, ref i, out input))
                 {
                     Console.Error.WriteLine("Missing value for --in.");
-                    Console.Error.WriteLine("Usage: shapeforge diagnose --in input.stl [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive] [--json [report.json]]");
-                    Environment.ExitCode = 2;
+                    Console.Error.WriteLine(DiagnoseUsage());
+                    Environment.ExitCode = ExitCodeInvalidArguments;
                     return;
                 }
 
@@ -360,15 +347,15 @@ static async Task RunDiagnoseAsync(string[] args, OperatorRegistry registry)
                 if (!TryReadArgumentValue(args, ref i, out var presetRaw))
                 {
                     Console.Error.WriteLine("Missing value for --preset.");
-                    Console.Error.WriteLine("Usage: shapeforge diagnose --in input.stl [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive] [--json [report.json]]");
-                    Environment.ExitCode = 2;
+                    Console.Error.WriteLine(DiagnoseUsage());
+                    Environment.ExitCode = ExitCodeInvalidArguments;
                     return;
                 }
 
                 if (!Presets.TryParsePreset(presetRaw, out preset))
                 {
                     Console.Error.WriteLine($"Unsupported preset '{presetRaw}'. Use Fdm, Sla/Resin, or Sls.");
-                    Environment.ExitCode = 2;
+                    Environment.ExitCode = ExitCodeInvalidArguments;
                     return;
                 }
 
@@ -377,15 +364,15 @@ static async Task RunDiagnoseAsync(string[] args, OperatorRegistry registry)
                 if (!TryReadArgumentValue(args, ref i, out var modeRaw))
                 {
                     Console.Error.WriteLine("Missing value for --mode.");
-                    Console.Error.WriteLine("Usage: shapeforge diagnose --in input.stl [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive] [--json [report.json]]");
-                    Environment.ExitCode = 2;
+                    Console.Error.WriteLine(DiagnoseUsage());
+                    Environment.ExitCode = ExitCodeInvalidArguments;
                     return;
                 }
 
                 if (!Presets.TryParseMode(modeRaw, out var parsedMode))
                 {
                     Console.Error.WriteLine($"Unsupported mode '{modeRaw}'. Use Fdm, Resin, or Sls.");
-                    Environment.ExitCode = 2;
+                    Environment.ExitCode = ExitCodeInvalidArguments;
                     return;
                 }
 
@@ -395,15 +382,15 @@ static async Task RunDiagnoseAsync(string[] args, OperatorRegistry registry)
                 if (!TryReadArgumentValue(args, ref i, out var qualityRaw))
                 {
                     Console.Error.WriteLine("Missing value for --quality.");
-                    Console.Error.WriteLine("Usage: shapeforge diagnose --in input.stl [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive] [--json [report.json]]");
-                    Environment.ExitCode = 2;
+                    Console.Error.WriteLine(DiagnoseUsage());
+                    Environment.ExitCode = ExitCodeInvalidArguments;
                     return;
                 }
 
                 if (!Presets.TryParseQuality(qualityRaw, out var parsedQuality))
                 {
                     Console.Error.WriteLine($"Unsupported quality '{qualityRaw}'. Use Preview or Final.");
-                    Environment.ExitCode = 2;
+                    Environment.ExitCode = ExitCodeInvalidArguments;
                     return;
                 }
 
@@ -413,8 +400,8 @@ static async Task RunDiagnoseAsync(string[] args, OperatorRegistry registry)
                 if (!TryReadArgumentValue(args, ref i, out unitsOverride))
                 {
                     Console.Error.WriteLine("Missing value for --units.");
-                    Console.Error.WriteLine("Usage: shapeforge diagnose --in input.stl [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive] [--json [report.json]]");
-                    Environment.ExitCode = 2;
+                    Console.Error.WriteLine(DiagnoseUsage());
+                    Environment.ExitCode = ExitCodeInvalidArguments;
                     return;
                 }
 
@@ -423,15 +410,15 @@ static async Task RunDiagnoseAsync(string[] args, OperatorRegistry registry)
                 if (!TryReadArgumentValue(args, ref i, out var repairModeRaw))
                 {
                     Console.Error.WriteLine("Missing value for --repair-mode.");
-                    Console.Error.WriteLine("Usage: shapeforge diagnose --in input.stl [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive] [--json [report.json]]");
-                    Environment.ExitCode = 2;
+                    Console.Error.WriteLine(DiagnoseUsage());
+                    Environment.ExitCode = ExitCodeInvalidArguments;
                     return;
                 }
 
                 if (!Presets.TryParseRepairMode(repairModeRaw, out var parsedRepairMode))
                 {
                     Console.Error.WriteLine($"Unsupported repair mode '{repairModeRaw}'. Use Conservative, Balanced, or Aggressive.");
-                    Environment.ExitCode = 2;
+                    Environment.ExitCode = ExitCodeInvalidArguments;
                     return;
                 }
 
@@ -442,8 +429,8 @@ static async Task RunDiagnoseAsync(string[] args, OperatorRegistry registry)
 
     if (string.IsNullOrWhiteSpace(input))
     {
-        Console.Error.WriteLine("Usage: shapeforge diagnose --in input.stl [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive] [--json [report.json]]");
-        Environment.ExitCode = 2;
+        Console.Error.WriteLine(DiagnoseUsage());
+        Environment.ExitCode = ExitCodeInvalidArguments;
         return;
     }
 
@@ -479,9 +466,18 @@ static async Task RunDiagnoseAsync(string[] args, OperatorRegistry registry)
                 {
                     Status = readiness.Status.ToString(),
                     Grade = readiness.Grade.ToString(),
+                    ExitCode = ExitCodeFromReadiness(readiness),
                     TopBlockers = readiness.TopBlockers.Select(b => new { b.Code, b.Message, b.RemediationHint }),
                     readiness.ConfidenceNote,
                     readiness.ConfidenceScore
+                },
+                ExitCodePolicy = new
+                {
+                    Success = ExitCodeSuccess,
+                    RuntimeFailure = ExitCodeRuntimeFailure,
+                    InvalidArguments = ExitCodeInvalidArguments,
+                    NeedsAttention = ExitCodeReadinessAttention,
+                    Blocked = ExitCodeReadinessBlocked
                 },
                 Topology = diagnostics.Topology,
                 Quality = diagnostics.Quality,
@@ -503,13 +499,12 @@ static async Task RunDiagnoseAsync(string[] args, OperatorRegistry registry)
             Console.WriteLine($"Wrote diagnostics JSON: {path}");
         }
 
-        var maxSeverity = diagnostics.Issues.MaxBy(d => d.Severity)?.Severity ?? IssueSeverity.Info;
-        Environment.ExitCode = maxSeverity >= IssueSeverity.Warning ? 2 : 0;
+        Environment.ExitCode = ExitCodeFromReadiness(readiness);
     }
     catch (Exception ex)
     {
         Console.Error.WriteLine($"Diagnose failed: {ex.Message}");
-        Environment.ExitCode = 1;
+        Environment.ExitCode = ExitCodeRuntimeFailure;
     }
 }
 
@@ -559,7 +554,7 @@ static void RunOperatorsCommand(string[] args, OperatorRegistry registry)
             if (!TryReadArgumentValue(args, ref i, out var rawFormat))
             {
                 Console.Error.WriteLine("Missing value for --format. Use table or json.");
-                Environment.ExitCode = 2;
+                Environment.ExitCode = ExitCodeInvalidArguments;
                 return;
             }
 
@@ -568,7 +563,7 @@ static void RunOperatorsCommand(string[] args, OperatorRegistry registry)
         }
 
         Console.Error.WriteLine($"Unknown option for operators command: {args[i]}");
-        Environment.ExitCode = 2;
+        Environment.ExitCode = ExitCodeInvalidArguments;
         return;
     }
 
@@ -614,7 +609,7 @@ static void RunOperatorsCommand(string[] args, OperatorRegistry registry)
     if (!format.Equals("table", StringComparison.OrdinalIgnoreCase))
     {
         Console.Error.WriteLine($"Unknown format '{format}'. Use table or json.");
-        Environment.ExitCode = 2;
+        Environment.ExitCode = ExitCodeInvalidArguments;
         return;
     }
 
@@ -676,6 +671,73 @@ static void PrintReadinessSummary(string title, ReadinessResult readiness)
     Console.WriteLine($"Confidence note: {readiness.ConfidenceNote}");
 }
 
+static int ExitCodeFromReadiness(ReadinessResult readiness)
+    => readiness.Status switch
+    {
+        ReadinessTrafficLight.Green => ExitCodeSuccess,
+        ReadinessTrafficLight.Yellow => ExitCodeReadinessAttention,
+        _ => ExitCodeReadinessBlocked
+    };
+
+static void PrintFixDeltaSummary(MeshDiagnostics before, MeshDiagnostics after)
+{
+    Console.WriteLine("Fix impact summary");
+    PrintDelta("triangles", before.Topology.GetValueOrDefault("triangles.count"), after.Topology.GetValueOrDefault("triangles.count"));
+    PrintDelta("boundary edges", before.Topology.GetValueOrDefault("edges.boundary.count"), after.Topology.GetValueOrDefault("edges.boundary.count"));
+    PrintDelta("non-manifold edges", before.Topology.GetValueOrDefault("edges.nonmanifold.count"), after.Topology.GetValueOrDefault("edges.nonmanifold.count"));
+    PrintDelta("shells", before.Topology.GetValueOrDefault("mesh.shells.count"), after.Topology.GetValueOrDefault("mesh.shells.count"));
+    PrintDelta("issues", before.Issues.Count(i => i.Severity >= IssueSeverity.Warning), after.Issues.Count(i => i.Severity >= IssueSeverity.Warning));
+}
+
+static void PrintOperatorReports(IReadOnlyList<OpReport> reports)
+{
+    foreach (var report in reports)
+    {
+        Console.WriteLine($"[{report.Name}] elapsed={report.Elapsed.TotalMilliseconds:0.##}ms");
+        foreach (var metric in report.Metrics.OrderBy(m => m.Key, StringComparer.Ordinal))
+        {
+            Console.WriteLine($"  metric {metric.Key}: {metric.Value}");
+        }
+
+        foreach (var warning in report.Warnings)
+        {
+            Console.WriteLine($"  warning: {warning}");
+        }
+
+        foreach (var note in report.Notes)
+        {
+            Console.WriteLine($"  note: {note}");
+        }
+    }
+}
+
+static void PrintWarningsSummary(MeshDiagnostics diagnostics, IReadOnlyList<OpReport> reports)
+{
+    Console.WriteLine("Warnings summary");
+    var operatorWarnings = reports.Sum(r => r.Warnings.Count) + reports.Sum(r => r.StructuredIssues.Count(i => i.Severity >= IssueSeverity.Warning));
+    var diagnosticWarnings = diagnostics.Issues.Count(i => i.Severity >= IssueSeverity.Warning);
+    Console.WriteLine($"  operator warnings: {operatorWarnings}");
+    Console.WriteLine($"  diagnostic warnings/errors: {diagnosticWarnings}");
+
+    foreach (var issue in diagnostics.Issues.Where(i => i.Severity >= IssueSeverity.Warning).OrderByDescending(i => i.Severity).ThenBy(i => i.Code, StringComparer.Ordinal))
+    {
+        Console.WriteLine($"  - {issue.Code}: {issue.Message}");
+    }
+}
+
+static void PrintDelta(string label, double before, double after)
+{
+    var delta = after - before;
+    var direction = delta switch
+    {
+        > 0 => "+",
+        < 0 => string.Empty,
+        _ => "±"
+    };
+
+    Console.WriteLine($"  {label}: {before:0.###} -> {after:0.###} ({direction}{delta:0.###})");
+}
+
 static bool TryReadArgumentValue(string[] args, ref int index, out string? value)
 {
     value = null;
@@ -702,4 +764,5 @@ static void PrintHelp()
     Console.WriteLine("  operators [--format table|json]  List available operators");
     Console.WriteLine("  fix --in --out [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive] [--manifest out.json]");
     Console.WriteLine("  diagnose --in [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive] [--json [path]]");
+    Console.WriteLine("  exit codes: 0=ready, 1=runtime failure, 2=invalid args, 3=needs attention, 4=blocked");
 }

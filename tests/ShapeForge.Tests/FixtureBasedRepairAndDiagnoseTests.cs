@@ -102,6 +102,32 @@ public class FixtureBasedRepairAndDiagnoseTests
         AssertExpectedMetrics(report.Metrics, fixture.PostFix.Metrics);
     }
 
+
+    [Fact]
+    public async Task FixtureBaselines_CleanCube_Hole_NonManifold_TinyShells_ThinWall_AreExplained()
+    {
+        var io = new StlMeshIO();
+        var fixtureIds = new[] { "cube_ok", "cube_hole", "nonmanifold_edge", "tiny_shells", "thin_wall" };
+
+        foreach (var fixtureId in fixtureIds)
+        {
+            var fixture = FixtureRegistry.Load(fixtureId);
+            var mesh = await io.LoadStlAsync(fixture.MeshPath);
+            var diagnostics = ReportCard.Build(mesh);
+
+            if (fixtureId == "thin_wall")
+            {
+                var thickness = new ThicknessEnforceOperator(1.2f, ThicknessMode.Inflate);
+                var (_, report) = await thickness.RunAsync(mesh, BuildContext(RepairMode.Balanced), CancellationToken.None);
+                diagnostics = ReportCard.Build(mesh, new[] { report });
+                Assert.Contains(diagnostics.Issues, i => i.Code == "printability.thin-vertices");
+            }
+
+            Assert.Equal(fixture.BaselineHasWarningsOrErrors, diagnostics.HasWarningsOrErrors);
+            AssertExpectedIssues(diagnostics, fixture.RequiredIssues);
+        }
+    }
+
     [Fact]
     public async Task CliDiagnose_ExitCodes_FollowSeveritySemantics()
     {
@@ -112,11 +138,14 @@ public class FixtureBasedRepairAndDiagnoseTests
         try
         {
             var warningFixture = FixtureRegistry.Load("cube_ok");
+            var blockedFixture = FixtureRegistry.Load("cube_hole");
             var warningExit = await RunCliAsync($"diagnose --in \"{warningFixture.MeshPath}\"");
+            var blockedExit = await RunCliAsync($"diagnose --in \"{blockedFixture.MeshPath}\"");
             var okExit = await RunCliAsync($"diagnose --in \"{healthyFile}\"");
             var usageExit = await RunCliAsync("diagnose");
 
-            Assert.Equal(2, warningExit);
+            Assert.Equal(3, warningExit);
+            Assert.Equal(4, blockedExit);
             Assert.Equal(0, okExit);
             Assert.Equal(2, usageExit);
         }
