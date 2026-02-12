@@ -48,6 +48,16 @@ This document defines project boundaries so features can be implemented with cle
 
 Tests should verify contracts at project boundaries and prevent ownership drift.
 
+
+## Ownership boundary summary
+
+- **Core**: canonical contracts and schema/version authority (`MeshModel`, `MeshDiagnostics`, `DiagnosticIssue`, `PipelineRunResult`, `OperatorSchema`, and recipe/PEM payloads).
+- **Cli**: argument/report adapters over Core contracts only.
+- **App**: UI state/bindings over Core contracts only.
+- **Tests**: contract compatibility and fixture-driven regression coverage.
+
+The dependency-direction rule is strict: host projects can depend on Core, while Core cannot depend on hosts.
+
 ## Dependency direction rule
 
 Dependency flow is one-way:
