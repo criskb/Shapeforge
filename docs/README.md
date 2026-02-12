@@ -26,3 +26,13 @@ To build the full distributable app, run `./scripts/macos/build-full-app.sh`.
 ## Roadmap
 
 See `docs/ROADMAP.md` for planned epics, fixture-driven validation scope, and release milestone gates.
+
+## Native Swift/Xcode rewrite track
+
+A phased native rewrite plan and bootstrap Swift package scaffold are available under:
+
+- `docs/SWIFT_REWRITE_PLAN.md`
+- `native/`
+
+This allows an Apple-first migration track while the .NET implementation remains the production baseline.
+
