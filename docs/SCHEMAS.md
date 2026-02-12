@@ -126,3 +126,16 @@ Not backward-compatible:
 - Migration must be deterministic and idempotent:
   - `normalize(normalize(payload)) == normalize(payload)`
 - Unsupported versions must fail fast with explicit version and accepted-range guidance.
+
+
+## Contract constants
+
+- Diagnostics schema constant: `MeshDiagnostics.CurrentSchemaVersion` (`1.0`).
+- Recipe/PEM schema constant: `RecipeDocument.CurrentVersion` (`2`).
+- Operator schema baseline constant: `OperatorSchema.CurrentSchemaVersion` (`1.0`).
+- Pipeline run payload constant: `PipelineRunResult.CurrentSchemaVersion` (`1.0`).
+
+Migration hook entry points:
+
+- `DiagnosticsSchemaMigrator.NormalizeToCurrent(JsonElement payload)`
+- `RecipeSchemaMigrator.NormalizeToCurrent(JsonElement payload)`

@@ -1,7 +1,8 @@
 using ShapeForge.Core.Operators;
+using ShapeForge.Core.Pipeline.SchemaMigrations;
+using ShapeForge.Core.Pipeline.SchemaMigrations.Recipes;
 using System.Globalization;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 
 namespace ShapeForge.Core.Pipeline;
 
@@ -59,38 +60,24 @@ public sealed record RecipeDocument(
     RecipeDefinition Recipe,
     PemDocument? Pem = null)
 {
-    public static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        WriteIndented = true,
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
-    };
+    public static JsonSerializerOptions JsonOptions => SchemaJson.Options;
+
+    public const int CurrentVersion = (int)RecipeVersion.V2;
 
     public RecipeVersion RecipeVersion => (RecipeVersion)Version;
 
     public static RecipeDocument CreateV2(ProfileDocument? profile, RecipeDefinition recipe, PemDocument? pem = null)
-        => new((int)RecipeVersion.V2, profile, recipe, pem);
+        => new(CurrentVersion, profile, recipe, pem);
 
     public static RecipeDocument FromJson(string json)
     {
-        using var doc = JsonDocument.Parse(json);
-        var root = doc.RootElement;
-        var version = root.TryGetProperty("version", out var versionNode) && versionNode.ValueKind == JsonValueKind.Number
-            ? versionNode.GetInt32()
-            : (int)RecipeVersion.V1;
-
-        return version switch
-        {
-            (int)RecipeVersion.V1 => MigrateFromV1(root),
-            (int)RecipeVersion.V2 => JsonSerializer.Deserialize<RecipeDocument>(json, JsonOptions)
-                ?? throw new InvalidOperationException("Invalid recipe JSON for version 2."),
-            _ => throw new InvalidOperationException($"Unsupported recipe version '{version}'.")
-        };
+        var normalized = RecipeSchemaMigrator.NormalizeToCurrent(json);
+        return normalized with { Version = CurrentVersion };
     }
 
-    public string ToJson() => JsonSerializer.Serialize(this with { Version = (int)RecipeVersion.V2 }, JsonOptions);
+    public string ToJson() => JsonSerializer.Serialize(this with { Version = CurrentVersion }, JsonOptions);
 
-    public RecipeDocument ToLatestVersion() => this with { Version = (int)RecipeVersion.V2 };
+    public RecipeDocument ToLatestVersion() => this with { Version = CurrentVersion };
 
     public PresetParameters ResolveEffectiveProfile(PresetParameters baseProfile, ProfileDocument? runtimeOverrides = null)
     {
@@ -172,21 +159,6 @@ public sealed record RecipeDocument(
 
         return errors;
     }
-
-    private static RecipeDocument MigrateFromV1(JsonElement root)
-    {
-        var units = root.TryGetProperty("units", out var unitsNode) ? unitsNode.GetString() : null;
-        var steps = root.TryGetProperty("steps", out var stepsNode)
-            ? JsonSerializer.Deserialize<List<RecipeStep>>(stepsNode.GetRawText(), JsonOptions) ?? []
-            : [];
-
-        return new RecipeDocument(
-            Version: (int)RecipeVersion.V2,
-            Profile: new ProfileDocument(Units: units),
-            Recipe: new RecipeDefinition(steps),
-            Pem: null);
-    }
-
     private static PresetParameters ApplyProfileOverrides(PresetParameters baseline, ProfileDocument? profile)
     {
         if (profile is null)

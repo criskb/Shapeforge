@@ -20,6 +20,8 @@ public record MeshModel(
     IReadOnlyList<MeshTransformRecord>? transformHistory = null,
     Dictionary<string, string>? Tags = null)
 {
+    public const string MetadataContractVersion = "1.0";
+
     public IReadOnlyList<MeshTransformRecord> TransformHistory { get; init; } = transformHistory ?? Array.Empty<MeshTransformRecord>();
 }
 

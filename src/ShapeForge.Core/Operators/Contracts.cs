@@ -30,15 +30,18 @@ public record OperatorSchema(
     string Version,
     string Description,
     IReadOnlyList<OperatorParameterSchema> Parameters,
-    string Category = "analysis.generic",
+    string Category = DefaultCategory,
     bool Deterministic = true,
     double EstimatedCost = 1.0,
     BackendCapabilityFlags RequiredBackendCapabilities = BackendCapabilityFlags.None,
     IReadOnlyList<ProcessMode>? SupportedModes = null,
     IReadOnlyList<PresetQuality>? SupportedQualities = null)
 {
+    public const string CurrentSchemaVersion = "1.0";
+    public const string DefaultCategory = "analysis.generic";
+
     public static OperatorSchema Empty(string id, string displayName)
-        => new(id, displayName, "1.0", string.Empty, Array.Empty<OperatorParameterSchema>());
+        => new(id, displayName, CurrentSchemaVersion, string.Empty, Array.Empty<OperatorParameterSchema>(), DefaultCategory);
 }
 
 [Flags]

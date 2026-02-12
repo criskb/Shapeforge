@@ -31,6 +31,44 @@ public class RecipeDocumentTests
         Assert.Single(doc.Recipe.Steps);
         Assert.Equal("repair.fix", doc.Recipe.Steps[0].Op);
     }
+    [Fact]
+    public void FromJson_SupportsCanonicalRecipeVersionField()
+    {
+        const string v2Json = """
+        {
+          "recipeVersion": 2,
+          "profile": { "units": "mm" },
+          "recipe": {
+            "steps": [
+              {
+                "op": "repair.fix",
+                "params": { "closeRadiusMm": 0.2 }
+              }
+            ]
+          }
+        }
+        """;
+
+        var doc = RecipeDocument.FromJson(v2Json);
+
+        Assert.Equal(RecipeDocument.CurrentVersion, doc.Version);
+        Assert.Equal("repair.fix", doc.Recipe.Steps[0].Op);
+    }
+
+    [Fact]
+    public void FromJson_RejectsUnsupportedRecipeVersion()
+    {
+        const string unsupported = """
+        {
+          "recipeVersion": 3,
+          "recipe": { "steps": [] }
+        }
+        """;
+
+        var ex = Assert.Throws<InvalidOperationException>(() => RecipeDocument.FromJson(unsupported));
+        Assert.Contains("Unsupported recipe version", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
 
     [Fact]
     public void ResolveEffectiveProfile_AppliesExpectedInheritanceOrder()
