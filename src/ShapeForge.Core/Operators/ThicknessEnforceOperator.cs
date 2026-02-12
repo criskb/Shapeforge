@@ -49,13 +49,15 @@ public sealed class ThicknessEnforceOperator : IOperator
         ct.ThrowIfCancellationRequested();
         var vertices = ToVectors(input.Vertices);
         var triangleCount = input.Indices.Length / 3;
-        var samplingDensity = Math.Clamp(ctx.ScalingPolicy.SamplingDensityScale, 0.1f, 1f);
-        var sampledVertices = SampleVertices(vertices, samplingDensity, ctx.DeterministicSeedFor(Id));
+        var adaptiveCap = ResolveScratchFloat(ctx, "perf.adaptive.sampling.cap", 1f);
+        var samplingDensity = Math.Clamp(MathF.Min(ctx.ScalingPolicy.SamplingDensityScale, adaptiveCap), 0.1f, 1f);
+        var maxSampleVertices = ResolveScratchInt(ctx, "perf.max.sample.vertices", vertices.Count);
+        var sampledVertices = SampleVertices(vertices, samplingDensity, maxSampleVertices, ctx.DeterministicSeedFor(Id));
 
         ctx.Progress.Report(0.2f);
         ct.ThrowIfCancellationRequested();
 
-        var nearestNeighborDistances = ComputeNearestNeighborDistances(sampledVertices);
+        var nearestNeighborDistances = ComputeNearestNeighborDistances(sampledVertices, ct);
         var thinBefore = nearestNeighborDistances.Count(d => d > 0f && d < _minimumMm);
         var observedMin = nearestNeighborDistances.Count == 0 ? 0f : nearestNeighborDistances.Where(d => d > 0f).DefaultIfEmpty(0f).Min();
 
@@ -66,6 +68,7 @@ public sealed class ThicknessEnforceOperator : IOperator
             $"executionMode={ctx.ExecutionMode}",
             $"sampleDensityScale={samplingDensity:0.###}",
             $"sampledVertices={sampledVertices.Count}",
+            $"maxSampleVertices={maxSampleVertices}",
             $"seed={ctx.DeterministicSeedFor(Id)}"
         };
         var output = input with { };
@@ -115,7 +118,8 @@ public sealed class ThicknessEnforceOperator : IOperator
         }
 
         ct.ThrowIfCancellationRequested();
-        var afterDistances = ComputeNearestNeighborDistances(SampleVertices(appliedVertices, samplingDensity, ctx.DeterministicSeedFor($"{Id}:after")));
+        var afterSampledVertices = SampleVertices(appliedVertices, samplingDensity, maxSampleVertices, ctx.DeterministicSeedFor($"{Id}:after"));
+        var afterDistances = ComputeNearestNeighborDistances(afterSampledVertices, ct);
         var thinAfter = afterDistances.Count(d => d > 0f && d < _minimumMm);
         var observedMinAfter = afterDistances.Count == 0 ? 0f : afterDistances.Where(d => d > 0f).DefaultIfEmpty(0f).Min();
 
@@ -127,6 +131,8 @@ public sealed class ThicknessEnforceOperator : IOperator
                 ["min.thickness.target.mm"] = _minimumMm,
                 ["triangles.sampled"] = triangleCount,
                 ["vertices.sampled"] = sampledVertices.Count,
+                ["vertices.sampled.max"] = maxSampleVertices,
+                ["sampling.adaptive.cap"] = adaptiveCap,
                 ["sampling.density.scale"] = samplingDensity,
                 ["thin.vertices.before"] = thinBefore,
                 ["thin.vertices.after"] = thinAfter,
@@ -142,14 +148,15 @@ public sealed class ThicknessEnforceOperator : IOperator
         return Task.FromResult((output, report));
     }
 
-    private static List<Vector3> SampleVertices(List<Vector3> vertices, float densityScale, int seed)
+    private static List<Vector3> SampleVertices(List<Vector3> vertices, float densityScale, int maxSampleVertices, int seed)
     {
-        if (vertices.Count <= 3 || densityScale >= 0.999f)
+        var hardCap = Math.Clamp(maxSampleVertices, 3, vertices.Count);
+        if (vertices.Count <= 3 || (densityScale >= 0.999f && hardCap >= vertices.Count))
         {
             return vertices;
         }
 
-        var target = Math.Clamp((int)MathF.Round(vertices.Count * densityScale), 3, vertices.Count);
+        var target = Math.Clamp((int)MathF.Round(vertices.Count * densityScale), 3, hardCap);
         var rng = new Random(seed);
         var indices = Enumerable.Range(0, vertices.Count)
             .OrderBy(_ => rng.Next())
@@ -166,6 +173,40 @@ public sealed class ThicknessEnforceOperator : IOperator
         return sampled;
     }
 
+
+    private static float ResolveScratchFloat(OperatorContext ctx, string key, float fallback)
+    {
+        if (!ctx.Scratch.TryGetValue(key, out var raw))
+        {
+            return fallback;
+        }
+
+        return raw switch
+        {
+            float f => f,
+            double d => (float)d,
+            int i => i,
+            _ => fallback
+        };
+    }
+
+    private static int ResolveScratchInt(OperatorContext ctx, string key, int fallback)
+    {
+        if (!ctx.Scratch.TryGetValue(key, out var raw))
+        {
+            return fallback;
+        }
+
+        return raw switch
+        {
+            int i => i,
+            long l => (int)Math.Clamp(l, (long)int.MinValue, (long)int.MaxValue),
+            float f => (int)MathF.Round(f),
+            double d => (int)Math.Round(d),
+            _ => fallback
+        };
+    }
+
     private static List<Vector3> ToVectors(float[] raw)
     {
         var result = new List<Vector3>(raw.Length / 3);
@@ -177,11 +218,15 @@ public sealed class ThicknessEnforceOperator : IOperator
         return result;
     }
 
-    private static List<float> ComputeNearestNeighborDistances(List<Vector3> vertices)
+    private static List<float> ComputeNearestNeighborDistances(List<Vector3> vertices, CancellationToken ct)
     {
         var result = new List<float>(vertices.Count);
         for (var i = 0; i < vertices.Count; i++)
         {
+            if ((i & 0x7F) == 0)
+            {
+                ct.ThrowIfCancellationRequested();
+            }
             var best = float.MaxValue;
             for (var j = 0; j < vertices.Count; j++)
             {
