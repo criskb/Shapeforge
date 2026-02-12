@@ -1,6 +1,7 @@
 using ShapeForge.Core.Backends;
 using ShapeForge.Core.Diagnostics;
 using ShapeForge.Core.Geometry;
+using ShapeForge.Core.Pipeline;
 using System.Numerics;
 
 namespace ShapeForge.Core.Operators;
