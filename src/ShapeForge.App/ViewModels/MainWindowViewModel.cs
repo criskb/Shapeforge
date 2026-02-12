@@ -41,6 +41,8 @@ public sealed class MainWindowViewModel : ObservableObject
     private string _selectedPreset = "Fdm";
     private string _selectedRecipe = "Default Repair";
     private string _selectedUnits = "mm";
+    private string _inputMeshPath = string.Empty;
+    private string _exportMeshPath = string.Empty;
     private string _statusMessage = "Ready";
 
     private MeshModel? _loadedMesh;
@@ -117,6 +119,18 @@ public sealed class MainWindowViewModel : ObservableObject
         private set => SetProperty(ref _statusMessage, value);
     }
 
+    public string InputMeshPath
+    {
+        get => _inputMeshPath;
+        set => SetProperty(ref _inputMeshPath, value);
+    }
+
+    public string ExportMeshPath
+    {
+        get => _exportMeshPath;
+        set => SetProperty(ref _exportMeshPath, value);
+    }
+
     public DiagnosticsPanelViewModel DiagnosticsPanel { get; }
     public OperatorStackViewModel OperatorStack { get; }
     public PipelineRunViewModel PipelineRun { get; }
@@ -131,7 +145,34 @@ public sealed class MainWindowViewModel : ObservableObject
 
     private void LoadMesh()
     {
-        _loadedMesh = BuildSampleMesh();
+        if (string.IsNullOrWhiteSpace(InputMeshPath))
+        {
+            MoveToStage(WorkflowStage.None, "Set an STL input path before loading.");
+            return;
+        }
+
+        if (!File.Exists(InputMeshPath))
+        {
+            MoveToStage(WorkflowStage.None, $"Input STL not found: {InputMeshPath}");
+            return;
+        }
+
+        try
+        {
+            var io = new StlMeshIO();
+            _loadedMesh = io.LoadStlAsync(InputMeshPath).GetAwaiter().GetResult();
+            if (!string.IsNullOrWhiteSpace(SelectedUnits))
+            {
+                _loadedMesh = _loadedMesh with { Units = SelectedUnits };
+            }
+        }
+        catch (Exception ex)
+        {
+            _loadedMesh = null;
+            MoveToStage(WorkflowStage.None, $"Failed to load STL: {ex.Message}");
+            return;
+        }
+
         _preDiagnostics = null;
         _postDiagnostics = null;
         _readiness = null;
@@ -149,7 +190,7 @@ public sealed class MainWindowViewModel : ObservableObject
         ReadinessSummary.Grade = "-";
         ReadinessSummary.Confidence = "-";
 
-        MoveToStage(WorkflowStage.Loaded, "Mesh loaded. Next: Diagnose.");
+        MoveToStage(WorkflowStage.Loaded, $"Mesh loaded from '{InputMeshPath}'. Next: Diagnose.");
     }
 
     private void Diagnose()
@@ -267,14 +308,30 @@ public sealed class MainWindowViewModel : ObservableObject
             return;
         }
 
-        var exportFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "ShapeForge", "Exports");
-        Directory.CreateDirectory(exportFolder);
-        var exportPath = Path.Combine(exportFolder, $"{DateTime.UtcNow:yyyyMMdd-HHmmss}-{SelectedRecipe.Replace(' ', '-')}.stl");
+        var exportPath = ResolveExportPath();
+        var exportFolder = Path.GetDirectoryName(exportPath);
+        if (!string.IsNullOrWhiteSpace(exportFolder))
+        {
+            Directory.CreateDirectory(exportFolder);
+        }
 
         var io = new StlMeshIO();
         io.SaveStlAsync(exportPath, _runResult.FinalMesh).GetAwaiter().GetResult();
 
+        ExportMeshPath = exportPath;
+
         MoveToStage(WorkflowStage.Exported, $"Exported: {exportPath}");
+    }
+
+    private string ResolveExportPath()
+    {
+        if (!string.IsNullOrWhiteSpace(ExportMeshPath))
+        {
+            return ExportMeshPath;
+        }
+
+        var exportFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "ShapeForge", "Exports");
+        return Path.Combine(exportFolder, $"{DateTime.UtcNow:yyyyMMdd-HHmmss}-{SelectedRecipe.Replace(' ', '-')}.stl");
     }
 
     private void MoveToStage(WorkflowStage stage, string message)
@@ -347,30 +404,4 @@ public sealed class MainWindowViewModel : ObservableObject
         return warnings;
     }
 
-    private static MeshModel BuildSampleMesh()
-    {
-        var vertices = new float[]
-        {
-            0,0,0,
-            1,0,0,
-            1,1,0,
-            0,1,0,
-            0,0,1,
-            1,0,1,
-            1,1,1,
-            0,1,1
-        };
-
-        var indices = new int[]
-        {
-            0,1,2, 0,2,3,
-            4,5,6, 4,6,7,
-            0,1,5, 0,5,4,
-            2,3,7, 2,7,6,
-            1,2,6, 1,6,5,
-            0,3,7, 0,7,4
-        };
-
-        return new MeshModel(vertices, indices, Normals: null, Units: "mm");
-    }
 }
