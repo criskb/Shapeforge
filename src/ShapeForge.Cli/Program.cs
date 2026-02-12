@@ -3,6 +3,17 @@ using ShapeForge.Core.IO;
 using ShapeForge.Core.Operators;
 using ShapeForge.Core.Pipeline;
 using System.Text.Json;
+using System.Text.Json.Serialization;
+
+
+string FixUsage() => "Usage: shapeforge fix --in input.stl --out output.stl [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive] [--manifest out.json]";
+
+JsonSerializerOptions BuildJsonOptions() => new()
+{
+    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+    WriteIndented = true,
+    Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
+};
 
 var registry = new OperatorRegistry();
 registry.Register(new RepairFixOperator());
@@ -52,6 +63,7 @@ static async Task RunFixAsync(string[] args, OperatorRegistry registry)
     ProcessMode? modeOverride = null;
     PresetQuality? qualityOverride = null;
     RepairMode? repairModeOverride = null;
+    string? manifestOutput = null;
 
     for (var i = 0; i < args.Length; i++)
     {
@@ -61,7 +73,7 @@ static async Task RunFixAsync(string[] args, OperatorRegistry registry)
                 if (!TryReadArgumentValue(args, ref i, out input))
                 {
                     Console.Error.WriteLine("Missing value for --in.");
-                    Console.Error.WriteLine("Usage: shapeforge fix --in input.stl --out output.stl [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive]");
+                    Console.Error.WriteLine(FixUsage());
                     Environment.ExitCode = 2;
                     return;
                 }
@@ -71,7 +83,7 @@ static async Task RunFixAsync(string[] args, OperatorRegistry registry)
                 if (!TryReadArgumentValue(args, ref i, out output))
                 {
                     Console.Error.WriteLine("Missing value for --out.");
-                    Console.Error.WriteLine("Usage: shapeforge fix --in input.stl --out output.stl [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive]");
+                    Console.Error.WriteLine(FixUsage());
                     Environment.ExitCode = 2;
                     return;
                 }
@@ -81,7 +93,7 @@ static async Task RunFixAsync(string[] args, OperatorRegistry registry)
                 if (!TryReadArgumentValue(args, ref i, out var presetRaw))
                 {
                     Console.Error.WriteLine("Missing value for --preset.");
-                    Console.Error.WriteLine("Usage: shapeforge fix --in input.stl --out output.stl [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive]");
+                    Console.Error.WriteLine(FixUsage());
                     Environment.ExitCode = 2;
                     return;
                 }
@@ -98,7 +110,7 @@ static async Task RunFixAsync(string[] args, OperatorRegistry registry)
                 if (!TryReadArgumentValue(args, ref i, out var modeRaw))
                 {
                     Console.Error.WriteLine("Missing value for --mode.");
-                    Console.Error.WriteLine("Usage: shapeforge fix --in input.stl --out output.stl [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive]");
+                    Console.Error.WriteLine(FixUsage());
                     Environment.ExitCode = 2;
                     return;
                 }
@@ -116,7 +128,7 @@ static async Task RunFixAsync(string[] args, OperatorRegistry registry)
                 if (!TryReadArgumentValue(args, ref i, out var qualityRaw))
                 {
                     Console.Error.WriteLine("Missing value for --quality.");
-                    Console.Error.WriteLine("Usage: shapeforge fix --in input.stl --out output.stl [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive]");
+                    Console.Error.WriteLine(FixUsage());
                     Environment.ExitCode = 2;
                     return;
                 }
@@ -134,7 +146,7 @@ static async Task RunFixAsync(string[] args, OperatorRegistry registry)
                 if (!TryReadArgumentValue(args, ref i, out unitsOverride))
                 {
                     Console.Error.WriteLine("Missing value for --units.");
-                    Console.Error.WriteLine("Usage: shapeforge fix --in input.stl --out output.stl [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive]");
+                    Console.Error.WriteLine(FixUsage());
                     Environment.ExitCode = 2;
                     return;
                 }
@@ -144,7 +156,7 @@ static async Task RunFixAsync(string[] args, OperatorRegistry registry)
                 if (!TryReadArgumentValue(args, ref i, out var repairModeRaw))
                 {
                     Console.Error.WriteLine("Missing value for --repair-mode.");
-                    Console.Error.WriteLine("Usage: shapeforge fix --in input.stl --out output.stl [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive]");
+                    Console.Error.WriteLine(FixUsage());
                     Environment.ExitCode = 2;
                     return;
                 }
@@ -158,12 +170,27 @@ static async Task RunFixAsync(string[] args, OperatorRegistry registry)
 
                 repairModeOverride = parsedRepairMode;
                 break;
+            case "--manifest":
+                if (!TryReadArgumentValue(args, ref i, out manifestOutput))
+                {
+                    Console.Error.WriteLine("Missing value for --manifest.");
+                    Console.Error.WriteLine(FixUsage());
+                    Environment.ExitCode = 2;
+                    return;
+                }
+
+                break;
+            default:
+                Console.Error.WriteLine($"Unknown option for fix command: {args[i]}");
+                Console.Error.WriteLine(FixUsage());
+                Environment.ExitCode = 2;
+                return;
         }
     }
 
     if (string.IsNullOrWhiteSpace(input) || string.IsNullOrWhiteSpace(output))
     {
-        Console.Error.WriteLine("Usage: shapeforge fix --in input.stl --out output.stl [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive]");
+        Console.Error.WriteLine(FixUsage());
         Environment.ExitCode = 2;
         return;
     }
@@ -214,9 +241,10 @@ static async Task RunFixAsync(string[] args, OperatorRegistry registry)
         var steps = ResolvePresetPipeline(profile, registry);
         PrintOperatorSupportWarnings(steps, profile, BackendCapabilityFlags.FastMesh);
 
-        var preDiagnostics = ReportCard.Build(mesh);
-        var (fixedMesh, reports) = await runner.RunAsync(mesh, steps, ctx, CancellationToken.None);
-        var postDiagnostics = ReportCard.Build(fixedMesh, reports);
+        var run = await runner.RunDetailedAsync(mesh, steps, ctx, CancellationToken.None);
+        var fixedMesh = run.FinalMesh;
+        var preDiagnostics = run.PreDiagnostics ?? ReportCard.Build(mesh);
+        var postDiagnostics = run.PostDiagnostics ?? ReportCard.Build(fixedMesh, run.StepReports);
         var evaluator = new ReadinessEvaluator();
         var preReadiness = evaluator.Evaluate(preDiagnostics, profile);
         var postReadiness = evaluator.Evaluate(postDiagnostics, profile);
@@ -229,7 +257,7 @@ static async Task RunFixAsync(string[] args, OperatorRegistry registry)
         PrintDiagnosticsSummary("Post-fix diagnostics", postDiagnostics);
         PrintReadinessSummary("Post-fix readiness summary", postReadiness);
 
-        foreach (var report in reports)
+        foreach (var report in run.StepReports)
         {
             Console.WriteLine($"[{report.Name}]");
             foreach (var metric in report.Metrics)
@@ -251,6 +279,22 @@ static async Task RunFixAsync(string[] args, OperatorRegistry registry)
         foreach (var issue in postDiagnostics.Issues.Where(i => i.Severity >= IssueSeverity.Warning))
         {
             Console.WriteLine($"WARNING: {issue.Code} - {issue.Message}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(manifestOutput))
+        {
+            var manifest = RunManifestBuilder.Build(
+                mesh,
+                run,
+                ctx,
+                preset: preset.ToString(),
+                profile: $"{profile.Mode}-{profile.Quality}-{profile.RepairMode}",
+                fileHash: RunManifestBuilder.ComputeFileHash(input),
+                readinessStatus: postReadiness.Status.ToString());
+
+            var manifestJson = JsonSerializer.Serialize(manifest, BuildJsonOptions());
+            await File.WriteAllTextAsync(manifestOutput, manifestJson);
+            Console.WriteLine($"Saved run manifest to {manifestOutput}");
         }
     }
     catch (Exception ex)
@@ -562,11 +606,7 @@ static void RunOperatorsCommand(string[] args, OperatorRegistry registry)
             compatibility
         };
 
-        Console.WriteLine(JsonSerializer.Serialize(payload, new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            WriteIndented = true
-        }));
+        Console.WriteLine(JsonSerializer.Serialize(payload, BuildJsonOptions()));
 
         return;
     }
@@ -660,6 +700,6 @@ static void PrintHelp()
     Console.WriteLine("ShapeForge CLI");
     Console.WriteLine("  version                 Show version");
     Console.WriteLine("  operators [--format table|json]  List available operators");
-    Console.WriteLine("  fix --in --out [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive]");
+    Console.WriteLine("  fix --in --out [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive] [--manifest out.json]");
     Console.WriteLine("  diagnose --in [--preset Fdm|Sla|Sls] [--mode Fdm|Resin|Sls] [--quality Preview|Final] [--units mm|in] [--repair-mode Conservative|Balanced|Aggressive] [--json [path]]");
 }
