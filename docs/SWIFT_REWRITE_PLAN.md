@@ -37,8 +37,8 @@ This is the active execution plan for ShapeForge as a **native macOS Swift/Xcode
 
 - [x] Package and targets initialized
 - [x] `version` and `operators` commands scaffolded
-- [ ] Add STL load/save in native core
-- [ ] Add `fix --in/--out` end-to-end path
+- [x] Add STL load/save in native core
+- [x] Add `fix --in/--out` end-to-end path
 - [ ] Add run manifest output model
 
 **Exit criteria**
@@ -46,9 +46,9 @@ This is the active execution plan for ShapeForge as a **native macOS Swift/Xcode
 
 ### Phase 2 — Diagnostics parity
 
-- [ ] Implement `MeshDiagnostics` computation
-- [ ] Add `DiagnosticIssue` severity pipeline
-- [ ] Implement `diagnose --json`
+- [x] Implement `MeshDiagnostics` computation
+- [x] Add `DiagnosticIssue` severity pipeline
+- [x] Implement `diagnose --json`
 - [ ] Match exit-code policy for automation
 
 **Exit criteria**

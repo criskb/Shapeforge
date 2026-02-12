@@ -26,6 +26,8 @@ swift test
 cd native
 swift run shapeforge-native version
 swift run shapeforge-native operators
+swift run shapeforge-native diagnose --in ./model.stl --json ./report.json
+swift run shapeforge-native fix --in ./model.stl --out ./fixed.stl --preset Fdm
 ```
 
 ## Development notes
