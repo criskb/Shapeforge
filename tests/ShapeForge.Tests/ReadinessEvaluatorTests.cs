@@ -6,9 +6,6 @@ namespace ShapeForge.Tests;
 
 public class ReadinessEvaluatorTests
 {
-    private static readonly string RepoRoot = FindRepoRoot();
-    private static readonly string FixturesDir = Path.Combine(RepoRoot, "tests", "ShapeForge.Tests", "Fixtures");
-
     [Fact]
     public void RulePrimitives_TriggerExpectedIssues()
     {
@@ -48,8 +45,10 @@ public class ReadinessEvaluatorTests
     public async Task Evaluator_ProducesDeterministicSeverity_ForFixtureMeshes()
     {
         var io = new StlMeshIO();
-        var watertight = await io.LoadStlAsync(Path.Combine(FixturesDir, "cube_ok.stl"));
-        var leaky = await io.LoadStlAsync(Path.Combine(FixturesDir, "nonmanifold_edge.stl"));
+        var watertightFixture = FixtureRegistry.Load("cube_ok");
+        var leakyFixture = FixtureRegistry.Load("nonmanifold_edge");
+        var watertight = await io.LoadStlAsync(watertightFixture.MeshPath);
+        var leaky = await io.LoadStlAsync(leakyFixture.MeshPath);
 
         var evaluator = new ReadinessEvaluator();
         var profile = Presets.Resolve(PrintPreset.Fdm);
@@ -65,21 +64,5 @@ public class ReadinessEvaluatorTests
         Assert.Equal(ReadinessGrade.Blocked, leakyReadiness.Grade);
         Assert.Contains(leakyReadiness.TopBlockers, b => b.Code == "mesh.not-watertight");
         Assert.Contains(leakyReadiness.TopBlockers, b => b.RemediationHint.Contains("hole fill", StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static string FindRepoRoot()
-    {
-        var current = new DirectoryInfo(AppContext.BaseDirectory);
-        while (current is not null)
-        {
-            if (File.Exists(Path.Combine(current.FullName, "ShapeForge.sln")))
-            {
-                return current.FullName;
-            }
-
-            current = current.Parent;
-        }
-
-        throw new InvalidOperationException("Could not locate repository root.");
     }
 }

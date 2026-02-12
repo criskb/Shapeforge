@@ -1,0 +1,18 @@
+{
+  "fixtureId": "tiny_shells",
+  "meshFile": "tiny_shells.stl",
+  "baselineDiagnostics": {
+    "hasWarningsOrErrors": true,
+    "requiredIssues": [
+      { "code": "mesh.shells.multiple", "severity": "Warning" }
+    ]
+  },
+  "postFix": {
+    "trianglesBefore": 24,
+    "trianglesAfter": 12,
+    "metrics": {
+      "triangles.removed.tiny-shells": 12,
+      "triangles.added.hole-closure": 0
+    }
+  }
+}
