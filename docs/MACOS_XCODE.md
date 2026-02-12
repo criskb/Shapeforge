@@ -1,102 +1,49 @@
-# Building and Running ShapeForge on macOS with Xcode
+# Building ShapeForge with Xcode (Native Swift)
 
-ShapeForge is a .NET 8 solution. On macOS, Xcode is used to provide the native toolchain and command-line tools required by graphics/native dependencies.
+ShapeForge is developed as a native Swift package for macOS.
 
 ## Prerequisites
 
 1. Install **Xcode** from the App Store.
-2. Install Xcode command line tools:
-
-   ```bash
-   xcode-select --install
-   ```
-
-3. Accept the Xcode license:
-
-   ```bash
-   sudo xcodebuild -license accept
-   ```
-
-4. Install **.NET 8 SDK**.
-
-## Build from Terminal (Xcode-backed toolchain)
-
-Build a **universal** macOS app (Apple Silicon + Intel):
+2. Install command line tools:
 
 ```bash
-./scripts/macos/build-app.sh universal
+xcode-select --install
 ```
 
-Build a **full production** universal app (Release + self-contained + ReadyToRun):
+3. Accept Xcode license:
 
 ```bash
-./scripts/macos/build-full-app.sh
+sudo xcodebuild -license accept
 ```
 
-Or explicitly:
+## Build from Terminal
 
 ```bash
-./scripts/macos/build-app.sh universal full
+cd native
+swift build
 ```
 
-This produces:
-
-```text
-artifacts/macos/universal/ShapeForge.App.app
-```
-
-Verify both architecture payloads exist:
+## Test
 
 ```bash
-file artifacts/macos/universal/ShapeForge.App.app/Contents/Resources/osx-arm64/ShapeForge.App
-file artifacts/macos/universal/ShapeForge.App.app/Contents/Resources/osx-x64/ShapeForge.App
+cd native
+swift test
 ```
 
-Expected output shows `arm64` for the first binary and `x86_64` for the second.
-
-Single-architecture builds are still available:
+## Run CLI
 
 ```bash
-./scripts/macos/build-app.sh osx-arm64
-./scripts/macos/build-app.sh osx-x64
+cd native
+swift run shapeforge-native version
+swift run shapeforge-native operators
 ```
 
-## Run
+## Open in Xcode
 
 ```bash
-./scripts/macos/run-app.sh universal
+cd native
+open Package.swift
 ```
 
-Run and auto-build full profile when needed:
-
-```bash
-./scripts/macos/run-app.sh universal full
-```
-
-You can still run single-architecture outputs with `osx-arm64` or `osx-x64`.
-
-## Run from Xcode UI (External Build System)
-
-1. Open Xcode → **File > New > Project...**
-2. Choose **macOS > Other > External Build System**.
-3. Set Build Tool to:
-
-   ```text
-   /bin/bash
-   ```
-
-4. Set Arguments to:
-
-   ```text
-   -lc './scripts/macos/build-app.sh universal'
-   ```
-
-5. Edit the scheme:
-   - Build action: keep external build step above.
-   - Run action executable: set to
-
-     ```text
-     $(SRCROOT)/artifacts/macos/universal/ShapeForge.App.app/Contents/MacOS/ShapeForge.App
-     ```
-
-This provides an Xcode-driven build + run loop for local development.
+Xcode will load package targets for `ShapeForgeCore`, `ShapeForgeCLI`, and `ShapeForgeCoreTests`.
