@@ -1,29 +1,35 @@
-# Development Guide
+# Native Development Guide
 
-## Solution layout
+## Requirements
 
-- `src/ShapeForge.Core`: domain model + operators + IO
-- `src/ShapeForge.Cli`: scripting entrypoint
-- `src/ShapeForge.App`: desktop UX shell
-- `tests/ShapeForge.Tests`: xUnit tests
+- macOS 13+
+- Xcode 15+ (or Xcode command line tools)
+- Swift 5.9+
 
-## Milestone notes
+## Project layout
 
-- M0 done: solution/project bootstrap, operator contracts, progress/cancellation patterns.
-- M1 partial: STL import/export implemented, desktop shell includes placeholder diagnostics.
-- M2 next: integrate PicoGK/ShapeKernel voxel pipeline in `RepairFixOperator`.
+- `native/Sources/ShapeForgeCore`: core contracts, diagnostics models, pipeline runtime
+- `native/Sources/ShapeForgeCLI`: CLI entrypoint and command handling
+- `native/Tests/ShapeForgeCoreTests`: deterministic unit tests
 
-## Build
+## Build and test
 
 ```bash
-dotnet build ShapeForge.sln
-dotnet test ShapeForge.sln
+cd native
+swift build
+swift test
 ```
 
-## macOS/Xcode workflow
+## Run CLI
 
-- Use `scripts/macos/build-app.sh` and `scripts/macos/run-app.sh`.
-- `build-app.sh universal` creates `artifacts/macos/universal/ShapeForge.App.app` with both `arm64` and `x86_64` payloads under `Contents/Resources/*`, selected by a launcher script.
-- Profiles: `dev` (default), `release`, `full`.
-- `scripts/macos/build-full-app.sh` builds `universal full` and creates `artifacts/macos/ShapeForge.App-macos-universal.zip`.
-- Full setup is documented in `docs/MACOS_XCODE.md`.
+```bash
+cd native
+swift run shapeforge-native version
+swift run shapeforge-native operators
+```
+
+## Development notes
+
+- Keep operator IDs stable for recipe compatibility.
+- Prefer deterministic behavior for all pipeline operations.
+- Add fixture-based tests before expanding operator behavior.

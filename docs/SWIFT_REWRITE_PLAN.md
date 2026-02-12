@@ -1,129 +1,80 @@
 # ShapeForge Native (Swift/Xcode) Rewrite Plan
 
-This document executes the "Option 2" strategy: a phased migration path to a native Apple stack while protecting roadmap progress and preserving deterministic pipeline behavior.
+This is the active execution plan for ShapeForge as a **native macOS Swift/Xcode project**.
 
-## Why this exists
+## Current status
 
-ShapeForge currently ships as a .NET 8 codebase with shared Core + CLI + Desktop layers. The rewrite track is for an Apple-first future where Xcode/Swift are the primary implementation stack.
+- ✅ Native Swift package scaffold created under `native/`
+- ✅ Initial `ShapeForgeCore` + `ShapeForgeCLI` targets in place
+- ✅ Baseline deterministic pipeline test in place
+- ✅ Legacy .NET solution, Avalonia app, and related build scripts removed
 
-## Principles
+## Execution principles
 
-1. **Behavior parity before feature expansion**: match current CLI/Core behavior first.
-2. **Schema continuity**: keep diagnostics/recipe/report artifacts compatible.
-3. **Determinism first**: preserve reproducibility for maker workflows and farms.
-4. **Phased cutover**: avoid all-at-once rewrites that freeze product progress.
+1. **Native-only delivery**: all new development targets Swift + Xcode.
+2. **Parity first**: keep command behavior and operator IDs stable while rebuilding.
+3. **Determinism**: same input + same params must produce same outputs.
+4. **Schema continuity**: keep diagnostics/recipe artifacts stable as features land.
 
-## Target module map (Swift Package)
+## Module map
 
 - `ShapeForgeCore`
-  - Geometry models
-  - Operator protocol + registry
-  - Pipeline runtime
-  - Diagnostics models and readiness evaluation
+  - geometry models
+  - diagnostics models
+  - operator protocol + registry
+  - pipeline runtime
 - `ShapeForgeCLI`
-  - Command parsing and command handlers
-  - Report rendering and exit code policy
+  - command parsing
+  - command handlers
+  - console/report output
 - `ShapeForgeCoreTests`
-  - Contract tests
-  - Fixture-driven diagnostics/repair tests
-
-## Parity matrix (v1)
-
-| Capability | Current status (.NET) | Native target (Swift) | Phase |
-|---|---|---|---|
-| STL load/save | Present | Equivalent parser/writer in Core | 2 |
-| Operator registry/listing | Present | Equivalent IDs and metadata | 2 |
-| `fix` command orchestration | Present | Equivalent command + outputs | 2 |
-| Diagnostics JSON output | Planned in .NET roadmap | Native schema implementation | 3 |
-| Print readiness scoring | Planned | Native rule engine | 3 |
-| App workflow shell | Present (Avalonia shell) | SwiftUI/AppKit workflow shell | 4 |
-| Resin/FDM advanced prep | Planned | Native implementation after parity | 5 |
+  - deterministic contract tests
+  - fixture-based regression tests (next)
 
 ## Phase plan
 
-### Phase 0 — Decision gate and scope lock (1–2 weeks)
+### Phase 1 — Core/CLI parity baseline (in progress)
 
-- Lock parity scope and defer net-new advanced features.
-- Freeze schema format requirements for diagnostics and recipes.
-- Define success criteria for replacing .NET runtime dependency in Apple builds.
-
-**Exit criteria**
-
-- Approved parity matrix.
-- Approved acceptance checklist and timeline.
-
-### Phase 1 — Native architecture skeleton (1 week)
-
-- Initialize `native/` Swift Package with target modules.
-- Define protocol-level contracts only:
-  - `MeshModel`
-  - `DiagnosticIssue`
-  - `MeshDiagnostics`
-  - `ShapeOperator`
-  - `PipelineRunner`
-- Add contract tests for determinism and schema encoding.
+- [x] Package and targets initialized
+- [x] `version` and `operators` commands scaffolded
+- [ ] Add STL load/save in native core
+- [ ] Add `fix --in/--out` end-to-end path
+- [ ] Add run manifest output model
 
 **Exit criteria**
+- Native CLI can process baseline fixtures with stable operator output.
 
-- `swift test` passes for foundational contracts.
+### Phase 2 — Diagnostics parity
 
-### Phase 2 — Core/CLI parity MVP (3–6 weeks)
-
-- Implement STL reader/writer.
-- Implement operator registry and pipeline execution.
-- Implement baseline cleanup/fix operator and `operators` + `fix` commands.
-- Add deterministic run manifest model.
-
-**Exit criteria**
-
-- Native CLI can execute `operators` and `fix` on baseline fixture meshes.
-- Fixture tests pass.
-
-### Phase 3 — Diagnostics parity (2–4 weeks)
-
-- Implement structured diagnostics model.
-- Implement readiness evaluator with severity rules.
-- Implement `diagnose --json` with exit code semantics.
+- [ ] Implement `MeshDiagnostics` computation
+- [ ] Add `DiagnosticIssue` severity pipeline
+- [ ] Implement `diagnose --json`
+- [ ] Match exit-code policy for automation
 
 **Exit criteria**
+- Stable diagnostics JSON and deterministic exit codes on fixture suite.
 
-- Stable diagnostics JSON generated from native CLI.
-- Exit codes match policy and tests.
+### Phase 3 — Native app shell (SwiftUI/AppKit)
 
-### Phase 4 — Native app parity MVP (3–6 weeks)
-
-- Build workflow shell:
-  - Import → Diagnose → Stack → Compare → Export.
-- Bind to shared native Core contracts.
-- Add per-step logs and run summary panels.
+- [ ] Build workflow stages: Import → Diagnose → Stack → Compare → Export
+- [ ] Bind stage data to `ShapeForgeCore` contracts
+- [ ] Add per-step logs and run summary
 
 **Exit criteria**
+- App can execute baseline repair workflow from import through export.
 
-- Apple-native app can run baseline repair workflow end-to-end.
+### Phase 4 — Print-prep feature expansion
 
-### Phase 5 — Feature catch-up and differentiation
-
-- Resin hollow/drain/trap checks.
-- FDM overhang/thickness workflows.
-- Split-to-bed and connectors.
+- [ ] FDM thickness + overhang metrics
+- [ ] Resin hollow + drain + trap checks
+- [ ] Split-to-bed and connector workflows
 
 **Exit criteria**
+- Native stack reaches planned print-readiness and prep feature parity.
 
-- Native stack reaches roadmap equivalence for targeted release.
+## Immediate next actions
 
-## Risks and mitigations
-
-- **Risk:** rewrite slows roadmap delivery.
-  - **Mitigation:** keep a parity-first backlog and freeze nonessential scope.
-- **Risk:** schema drift breaks automation.
-  - **Mitigation:** contract tests with canonical fixtures and JSON snapshots.
-- **Risk:** deterministic behavior regressions.
-  - **Mitigation:** fixed seeds + fixture baseline hash checks.
-
-## Acceptance gates
-
-1. Native contract tests green.
-2. CLI parity commands green on fixtures.
-3. Diagnostics schema compatibility validated.
-4. Native app performs baseline repair flow.
-5. Product decision: native-only cutover or dual-track support.
+1. Implement native STL reader/writer in `ShapeForgeCore`.
+2. Add CLI `fix` command wiring with deterministic operator reporting.
+3. Add fixture files and regression tests in `native/Tests`.
+4. Start diagnostics JSON schema snapshots for forward compatibility.
