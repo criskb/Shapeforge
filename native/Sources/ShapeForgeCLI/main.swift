@@ -1,20 +1,6 @@
 import Foundation
 import ShapeForgeCore
 
-@main
-struct ShapeForgeCliMain {
-    static func main() {
-        do {
-            let cli = Cli()
-            let code = try cli.run(args: Array(CommandLine.arguments.dropFirst()))
-            exit(Int32(code))
-        } catch {
-            fputs("error: \(error.localizedDescription)\n", stderr)
-            exit(1)
-        }
-    }
-}
-
 struct Cli {
     func run(args: [String]) throws -> Int {
         guard let command = args.first else {
@@ -124,4 +110,13 @@ struct Cli {
         print("  diagnose --in model.stl [--json report.json] [--preset Fdm|Resin]")
         print("  fix --in model.stl --out fixed.stl [--preset Fdm|Resin]")
     }
+}
+
+do {
+    let cli = Cli()
+    let code = try cli.run(args: Array(CommandLine.arguments.dropFirst()))
+    exit(Int32(code))
+} catch {
+    fputs("error: \(error.localizedDescription)\n", stderr)
+    exit(1)
 }
